@@ -254,19 +254,32 @@ That this is more faithful than the cloud deployment is the point: the
 appliance is supposed to sit inside the plant's network, not in a
 region.
 
-### One more thing we are being precise about: which screener ran
+### Which screener ran, and why the ledger says so
 
 [app/fleet/guards.py](app/fleet/guards.py) calls **Model Armor**
-(`sanitize_user_prompt`) whenever `MODEL_ARMOR_TEMPLATE` is configured,
-and falls back to a local screen with the same contract when it is not.
-Provisioning a Model Armor template needs project-level access this
-build did not have, so **the deployed demo runs the local screener** —
-and every GUARD row in the ledger names the path that ran
-(`screener: model-armor` or `screener: local-fallback`). Set
-`MODEL_ARMOR_TEMPLATE` and the managed path takes over with no code
-change. We would rather show you the seam than let a ledger row imply
-a service we did not call. A silent fallback is indistinguishable from
-a lie, which is why nothing here is silent.
+(`sanitize_user_prompt`) against a prompt-injection/jailbreak template,
+and every GUARD row in the ledger names the path that actually ran —
+`screener: model-armor` or `screener: local-fallback`. On the real
+service, our poisoned fixture returns `MATCH_FOUND` on
+`pi_and_jailbreak` at **HIGH** confidence; the embedded instruction is
+stripped verbatim, the reported values survive, and the clean report
+passes untouched.
+
+That naming is not decoration. Getting here took two corrections worth
+stating, because both are the kind that pass a local test and fail in
+production:
+
+- Model Armor carries **its own IAM role set** — `roles/owner` does not
+  include it. The template needs `roles/modelarmor.admin`, and the
+  runtime service account needs `roles/modelarmor.user`.
+- The screener is **regional**, and `GOOGLE_CLOUD_LOCATION` here is
+  `global` because that is where Gemini 3.x serves from. Building the
+  Model Armor endpoint from that variable produced a hostname that
+  quietly failed, so the guard fell back while still reporting a strip.
+  It now carries `MODEL_ARMOR_LOCATION` of its own.
+
+The second one is exactly why the fallback announces itself. A silent
+fallback is indistinguishable from a lie, and it is what caught this.
 
 **Limitations, stated plainly.** Recall 53.9%: trend-driven exceedances
 are the catchable half; sudden upsets are not in last month's curve —
