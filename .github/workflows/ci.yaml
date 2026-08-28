@@ -20,8 +20,11 @@ jobs:
         with:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@v8.0.0
+      # ruff lives in the `lint` optional-dependency group, which
+      # --all-groups does not cover; without --extra lint the lint step
+      # fails with "Failed to spawn: ruff".
       - name: Install dependencies
-        run: uv sync --locked --all-groups
+        run: uv sync --locked --all-groups --extra lint
       - name: Lint
         run: uv run ruff check app fixtures data edge primacy
       - name: Policy tests (authority, scope, supervisor, guards, arbiter)
