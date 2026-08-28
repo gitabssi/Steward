@@ -364,20 +364,35 @@ entire session.
 
 ![Calm](docs/screenshots/s1-calm.png)
 
-**The coupling.** An infiltration surge; the biology starves; the
-aeration keeper proposes raising the blowers; the flow warden prices the
-retention-time cost; the permit sentinel says which limit breaches
-first. One proposed action, two counter-consequences, three agents —
-escalated to the operator with the full costed option set.
+**The coupling — and the registry doing real work.** An infiltration
+surge; dissolved oxygen falls to 0.9; the aeration keeper proposes
+raising the blowers and the flow warden answers with the cost, so the
+arbiter escalates both costed options to the operator (`CONTENTION` →
+`ESCALATED`, a 15-minute window). In the same frame: the catalog misses
+`wet-weather-bypass-specialist`, the registry **resolves it live in
+60 ms from the State Primacy Agency** and mounts it cross-department;
+Model Armor **denies** an instruction embedded in an inbound briefing;
+and the permit sentinel **pins ammonia** — enlarging it and demoting
+the rest. The operator did not rearrange that screen; an agent did, and
+the ledger says which one.
 
 ![Coupling](docs/screenshots/s2-coupling.png)
 
-**"That number never reached you."** The supervisor catches a claim
-that contradicts the live sensor it should have read, quarantines the
-worker on the spot — red at its station — and the withheld claim never
-reaches the operator.
+**"That number never reached you."** The mounted specialist, briefed
+with an hours-old lab report, asserts a figure that contradicts the
+live sensor. The supervisor withholds the claim, quarantines the worker
+on the spot, and re-issues the task. Every step is an attributed row
+with a trace id — and note the ledger collapsing six identical
+citations into `×5` so the denials stay readable.
 
-![Quarantine](docs/screenshots/s3-quarantine.png)
+![Quarantine](docs/screenshots/s5b-readback.png)
+
+**The whole shift at once.** Later in the same run: both request cards
+open (the aeration contention and the one-tanker-three-obligations
+escalation), the handover drafted for the covering operator, and the
+time windows reading in the units an operator actually uses.
+
+![Full shift](docs/screenshots/s3-quarantine.png)
 
 **The Control Centre.** Every agent inspectable: identity, scope,
 authority as a live control (observe / recommend / act), the registry
@@ -387,9 +402,10 @@ which existed on day one.
 ![Control Centre](docs/screenshots/s4-controlcentre.png)
 
 **The decision.** One tanker, three obligations. The fleet costs the
-options; the operator chooses; readback, confirm — only then is the
+options; the operator chooses; **readback, confirm** — only then is the
 single-use approval token minted and the irreversible tool allowed to
-run. Whatever he doesn't pick, the cost is recorded.
+run. Whatever he doesn't pick, the cost is recorded and lands in the
+week's assessment.
 
 ![Decision](docs/screenshots/s5-decision.png)
 

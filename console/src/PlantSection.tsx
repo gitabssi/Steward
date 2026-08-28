@@ -65,20 +65,24 @@ export function PlantSection({
   const breath = Math.max(1.6, 4 - 2.4 * Math.max(0, loadRatio - 0.62));
   const stressed = doLevel < 1.5;
 
-  // Recent activity per agent (anchor comes alive for 4s after it acts).
+  // Recent activity per agent: the anchor comes alive for 4s after it
+  // acts. Quarantine is different — it is a standing state, not a blip,
+  // so it is tracked across the whole session and cleared only when the
+  // operator reinstates the agent. A fence that stops being visible
+  // because the ledger scrolled is a fence nobody can audit.
   const now = Date.now() / 1000;
   const activity = useMemo(() => {
-    const map: Record<string, { at: number; deny: boolean; quarantined: boolean }> = {};
-    for (const entry of entries.slice(-160)) {
+    const map: Record<string, { at: number; deny: boolean }> = {};
+    const quarantined = new Set<string>();
+    const recentFrom = Math.max(0, entries.length - 160);
+    entries.forEach((entry, i) => {
       const agent = agentOf(entry.actor);
-      if (!agent) continue;
-      map[agent] = {
-        at: entry.ts,
-        deny: entry.outcome === "DENY",
-        quarantined: entry.kind === "quarantine" || (map[agent]?.quarantined ?? false),
-      };
-    }
-    return map;
+      if (!agent) return;
+      if (entry.kind === "quarantine") quarantined.add(agent);
+      if (entry.action.includes("reinstated from quarantine")) quarantined.delete(agent);
+      if (i >= recentFrom) map[agent] = { at: entry.ts, deny: entry.outcome === "DENY" };
+    });
+    return { map, quarantined };
   }, [entries]);
 
   // Handoff traces render for ~3.5 s.
@@ -229,11 +233,11 @@ export function PlantSection({
       {/* agent anchors */}
       {Object.entries(AGENT_STATION).map(([agent, stationId]) => {
         const station = STATIONS[stationId];
-        const act = activity[agent];
+        const act = activity.map[agent];
         const isActive = act && now - act.at < 4;
-        const isQuarantined = act?.quarantined;
+        const isQuarantined = activity.quarantined.has(agent);
         const color = isQuarantined ? "var(--red)" : isActive ? "var(--teal)" : "var(--ink-soft)";
-        if (agent === "bypass-specialist" && !act) return null; // not mounted yet
+        if (agent === "bypass-specialist" && !act && !isQuarantined) return null; // not mounted yet
         return (
           <g key={agent}>
             <circle

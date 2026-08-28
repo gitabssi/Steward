@@ -29,6 +29,11 @@ export default function App() {
           voice={voice}
           onToggleVoice={() => setVoice((v) => !v)}
           onOpenControlCentre={() => setDrawerOpen(true)}
+          onReopenCapacity={
+            capacityEntry && capacityDismissed
+              ? () => setCapacityDismissed(false)
+              : undefined
+          }
         />
         <div className="region plant">
           <PlantSection state={state} entries={entries} live={live} />

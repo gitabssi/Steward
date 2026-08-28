@@ -13,12 +13,16 @@ export function TopBar({
   voice,
   onToggleVoice,
   onOpenControlCentre,
+  onReopenCapacity,
 }: {
   state: ShiftState | null;
   live: boolean;
   voice: boolean;
   onToggleVoice: () => void;
   onOpenControlCentre: () => void;
+  /** Present only once the fleet has issued one — "not now" must not
+   *  mean "never": the assessment is the week's deliverable. */
+  onReopenCapacity?: () => void;
 }) {
   const facility = state?.facility;
   return (
@@ -47,6 +51,23 @@ export function TopBar({
             {live ? "● LIVE" : "○ DEGRADED — last known state shown"}
           </span>
         </div>
+        {onReopenCapacity && (
+          <button
+            onClick={onReopenCapacity}
+            title="The week's capacity assessment, issued by the fleet"
+            style={{
+              fontFamily: "var(--mono)",
+              fontSize: 11,
+              background: "none",
+              border: "1px solid var(--amber)",
+              color: "var(--amber)",
+              padding: "6px 12px",
+              cursor: "pointer",
+            }}
+          >
+            CAPACITY ASSESSMENT
+          </button>
+        )}
         <button
           onClick={onToggleVoice}
           title="Chirp 3 HD — system voice, in product"

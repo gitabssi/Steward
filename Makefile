@@ -15,10 +15,10 @@
 PROJECT ?= $(shell gcloud config get-value project 2>/dev/null)
 REGION ?= us-central1
 
-.PHONY: install dev dev-console console test data backtest deploy deploy-run deploy-all lint
+.PHONY: install dev dev-console console test test-all data backtest deploy deploy-run deploy-all lint
 
 install:
-	uv sync --all-groups
+	uv sync --all-groups --extra lint
 	cd console && npm install --no-fund --no-audit
 
 # One command, one URL: the fleet serves the built console at
@@ -43,8 +43,15 @@ console:
 dev-console:
 	cd console && npm run dev
 
+# The fences, verified with no cloud project and no credentials.
 test:
 	uv run pytest tests/unit -q
+
+# Adds the live-agent checks; needs ADC and a project.
+test-all:
+	uv run pytest tests/unit -q
+	GOOGLE_GENAI_USE_VERTEXAI=true GOOGLE_CLOUD_LOCATION=global \
+	  uv run pytest tests/integration -q
 
 lint:
 	uv run ruff check app fixtures data edge primacy
