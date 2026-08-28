@@ -340,10 +340,16 @@ registry does real work.
 
 ## Bonus contributions
 
-- **Gemma 4 E4B** — self-hosted in [edge/](edge/) (Ollama, weights in
-  the container), reading raw SCADA telemetry and dictated round notes
-  *inside* the OT boundary and emitting de-identified summaries — the
-  data-sovereignty enforcement point, not a checkbox.
+- **Gemma 4** — self-hosted in [edge/](edge/) (Ollama, weights baked
+  into the container), reading raw SCADA telemetry and dictated round
+  notes *inside* the OT boundary and emitting de-identified summaries —
+  the data-sovereignty enforcement point, not a checkbox. The deployed
+  service runs **E2B** because it sits on Cloud Run's CPU, where E4B's
+  first token outlives a request; both are Gemma 4 edge models with
+  native audio, the appliance this stands in for carries an
+  accelerator, and `--build-arg EDGE_MODEL=gemma4:e4b` switches it. The
+  property being demonstrated — raw plant data never crossing the
+  boundary — is identical either way.
 - **TimesFM 2.5** — BigQuery ML `AI.FORECAST` quantile output; powers
   the national backtest and the exceedance-probability framing.
 - **Chirp 3 HD** — the system's voice in product (`/api/speak`, VOICE

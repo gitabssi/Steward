@@ -13,7 +13,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip3 install --no-cache-dir --break-system-packages fastapi uvicorn pydantic
 
-ARG EDGE_MODEL=gemma4:e4b
+# E2B is the default because this container runs on Cloud Run's CPU,
+# where E4B's first token exceeds a request's lifetime. Both are Gemma 4
+# edge models with native audio, and the property this service exists to
+# demonstrate — that raw plant data never crosses the OT boundary — is
+# identical either way. A real appliance carries an accelerator and runs
+# E4B: build with --build-arg EDGE_MODEL=gemma4:e4b.
+ARG EDGE_MODEL=gemma4:e2b
 ENV EDGE_MODEL=${EDGE_MODEL}
 
 # Bake the weights into the image so cold starts don't pull gigabytes.

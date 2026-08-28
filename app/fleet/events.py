@@ -23,7 +23,7 @@ import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 from opentelemetry import trace as otel_trace
 
@@ -127,8 +127,13 @@ class EventBus:
 
     # -- persistence (best-effort, loud on failure) -------------------------
 
+    # The heartbeat is not an audit record. Telemetry streams to the
+    # console and belongs in a historian; what persists here is the
+    # attributed, consequential acts an auditor would ask to see.
+    _EPHEMERAL: ClassVar[frozenset[EventKind]] = frozenset({EventKind.TELEMETRY})
+
     def _persist(self, entry: LedgerEntry) -> None:
-        if self._firestore_failed:
+        if self._firestore_failed or entry.kind in self._EPHEMERAL:
             return
         if self._firestore is None:
             if not os.environ.get("GOOGLE_CLOUD_PROJECT"):
