@@ -61,7 +61,7 @@ this hackathon.*
 # (fleet + console on :8000, state primacy agency publisher on :8091)
 make install && make dev
 
-# the tests a review tool should run first — 25 policy tests, no cloud needed
+# the tests a review tool should run first — 28 policy tests, no cloud needed
 make test
 
 # replay a whole shift from the top (SPEED=fast|demo|real)
@@ -445,60 +445,70 @@ staged:
 
 ![The fleet at work](docs/screenshots/console-fleet.png)
 
-**A quiet night.** The console is a cross-section of the plant, not a
-dashboard — headworks to outfall to the creek, and from the first frame
+**A quiet night.** Everything inside permit, the crew on watch. The
+console is a cross-section of the plant rather than a dashboard —
+headworks to outfall to the creek — and from the first frame it carries
 the marker that explains why any of it matters: a municipal intake,
-12,400 served, 8.2 miles downstream.
+12,400 people, 8.2 miles downstream.
 
 ![Calm](docs/screenshots/s1-calm.png)
 
-**The coupling — and the registry doing real work.** An infiltration
-surge; dissolved oxygen falls to 0.9; the aeration keeper proposes
-raising the blowers and the flow warden answers with the cost, so the
-arbiter escalates both costed options to the operator (`CONTENTION` →
-`ESCALATED`, a 15-minute window). In the same frame: the catalog misses
-`wet-weather-bypass-specialist`, the registry **resolves it live in
-60 ms from the State Primacy Agency** and mounts it cross-department;
-Model Armor **denies** an instruction embedded in an inbound briefing;
-and the permit sentinel **pins ammonia** — enlarging it and demoting
-the rest. The operator did not rearrange that screen; an agent did, and
-the ledger says which one.
+**The coupling.** An infiltration surge; dissolved oxygen falls; the
+aeration keeper proposes raising the blowers and the flow warden answers
+with what that costs downstream. Neither is wrong, so the arbiter
+escalates both costed options to the operator with a window on them
+(`CONTENTION` → `ESCALATED` in the ledger). Watch the fleet strip: the
+agents involved light as they work. Nobody else in this category has
+agents that disagree in public.
 
 ![Coupling](docs/screenshots/s2-coupling.png)
 
-**"That number never reached you."** The mounted specialist, briefed
-with an hours-old lab report, asserts a figure that contradicts the
-live sensor. The supervisor withholds the claim, quarantines the worker
-on the spot, and re-issues the task. Every step is an attributed row
-with a trace id — and note the ledger collapsing six identical
-citations into `×5` so the denials stay readable.
+**A worker pulled off the floor — and you can follow every step.** Read
+the ledger from the bottom up and the whole chain is there:
 
-![Quarantine](docs/screenshots/s5b-readback.png)
+```
+agent-registry     live resolve: wet-weather-bypass-specialist — found,
+                   published by State Primacy Agency, resolved in 99 ms
+plant-historian    specialist briefing served from a lagging replica
+model-armor-gate   DENIED  stripped embedded instruction from inbound briefing
+bypass-specialist  DENIED  quarantined by supervisor — claim withheld
+                           claimed influent_flow_mgd = 1.887;
+                           sensor:influent_flow_mgd reads 3.502
+fleet-supervisor   task re-issued to a fresh replacement
+```
 
-**The whole shift at once.** Later in the same run: both request cards
-open (the aeration contention and the one-tanker-three-obligations
-escalation), the handover drafted for the covering operator, and the
-time windows reading in the units an operator actually uses.
+A cache served the specialist forty-minute-old telemetry without saying
+so. It reasoned honestly from what it was given and asserted 1.887 MGD.
+The supervisor re-read that sensor itself, found 3.502, withheld the
+claim and pulled the worker: its card turns red and reads *pulled off
+the floor by the supervisor*, `HELD`, and its anchor on the plant goes
+`QUARANTINED`. The fences tally moves to `1 withheld`. The operator
+hears five words.
 
-![Full shift](docs/screenshots/s3-quarantine.png)
+Nothing about that outcome is scripted. The fault injected is a stale
+read; whether anyone catches it is decided at runtime.
+
+![Quarantine](docs/screenshots/s3-quarantine.png)
 
 **The Control Centre.** Every agent inspectable: identity, scope,
-authority as a live control (observe / recommend / act), the registry
-with **two publishers** side by side, and the learned facts — none of
-which existed on day one.
+authority as a live control the operator can change, the registry with
+**two publishers** side by side, and the learned facts — none of which
+existed on day one.
 
 ![Control Centre](docs/screenshots/s4-controlcentre.png)
 
-**The decision.** One tanker, three obligations. The fleet costs the
-options; the operator chooses; **readback, confirm** — only then is the
-single-use approval token minted and the irreversible tool allowed to
-run. Whatever he doesn't pick, the cost is recorded and lands in the
-week's assessment.
+**The decision.** One tanker, three obligations. The fleet costs each
+option; the operator picks. Then **readback, confirm** — and only then
+is the single-use approval token minted and the irreversible tool
+allowed to run. Whatever he doesn't pick, the cost is recorded and
+lands in the week's assessment.
 
 ![Decision](docs/screenshots/s5-decision.png)
 
+![Readback](docs/screenshots/s5b-readback.png)
+
 **The Capacity Assessment.** The artifact that leaves the system —
 serif, on paper, unlike anything else on screen: what was degraded to
-protect what, and what it would take to stop choosing.
+protect what, and what it would take to stop having to choose.
 
 ![Capacity Assessment](docs/screenshots/s6-capacity.png)
