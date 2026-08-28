@@ -215,6 +215,31 @@ and reported. The story is about capacity, not safety.
    usually earlier) to the date the report actually reached the
    regulator (`VALUE_RECEIVED_DATE`).
 
+### What the deployed edge actually does, and what it doesn't
+
+The boundary in [edge/](edge/) is real and it is the only path plant
+data can take. Two of its three behaviours run live on the deployed
+service and you can check them yourself:
+
+```bash
+curl -s https://steward-edge-i64yn4kmyq-uc.a.run.app/health
+curl -s -X POST https://steward-edge-i64yn4kmyq-uc.a.run.app/transcribe \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"Dale Whitmore logged blower two at 341 Cedar Road, reach him on 555-201-8899."}'
+# → {"path":"edge-text","text":"[name] logged blower two at [address], reach him on [phone]."}
+```
+
+The third — Gemma summarising raw SCADA readings — needs an
+accelerator. Cloud Run GPUs require quota this project was not granted,
+and on CPU the model's first token outlives the request that asked for
+it. So on the deployed service `/summarize` **fails closed**: it
+returns `raw telemetry withheld at the boundary` rather than passing
+anything through unsummarised. That is the correct failure mode for a
+sovereignty boundary and it is the one we shipped — the boundary holds
+whether or not the model answers. With an accelerator (or locally, via
+`docker build edge/ && docker run`), the same code path returns the
+structured summary.
+
 ### One more thing we are being precise about: which screener ran
 
 [app/fleet/guards.py](app/fleet/guards.py) calls **Model Armor**
