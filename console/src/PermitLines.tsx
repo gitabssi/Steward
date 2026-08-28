@@ -29,7 +29,12 @@ export function PermitLines({ state }: { state: ShiftState | null }) {
         return (
           <div key={parameter} className={cls}>
             <div className="head">
-              <span className="label">{limit?.label ?? parameter}</span>
+              <span className="label">
+                {limit?.label ?? parameter}
+                {pinned === parameter && (
+                  <span className="pinned-by"> · pinned by permit-sentinel</span>
+                )}
+              </span>
               <span className="lim">
                 limit {cap} {limit?.unit}
               </span>
@@ -49,7 +54,10 @@ export function PermitLines({ state }: { state: ShiftState | null }) {
               <span className="val" style={{ color: ratio > 0.72 ? color : "var(--ink)" }}>
                 {value.toFixed(value >= 10 ? 1 : 2)}
               </span>
-              <span className="lim">{limit?.unit}</span>
+              <span className="lim">
+                {limit?.unit}
+                {ratio > 0.72 && <span className="forecast-by"> · TimesFM P90</span>}
+              </span>
             </div>
           </div>
         );

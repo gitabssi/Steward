@@ -11,6 +11,7 @@ export function TopBar({
   state,
   live,
   voice,
+  speaking,
   onToggleVoice,
   onOpenControlCentre,
   onReopenCapacity,
@@ -18,6 +19,7 @@ export function TopBar({
   state: ShiftState | null;
   live: boolean;
   voice: boolean;
+  speaking: boolean;
   onToggleVoice: () => void;
   onOpenControlCentre: () => void;
   /** Present only once the fleet has issued one — "not now" must not
@@ -36,7 +38,7 @@ export function TopBar({
       </div>
       <div className="stat">
         <div>
-          <span className="label">Fleet uptime </span>
+          <span className="label">Agent Runtime · unbroken </span>
           <span className="v">{state ? uptime(state.uptime_seconds) : "—"}</span>
         </div>
         <div>
@@ -70,18 +72,14 @@ export function TopBar({
         )}
         <button
           onClick={onToggleVoice}
-          title="Chirp 3 HD — system voice, in product"
+          title="Chirp 3 HD — the system's voice, spoken in product"
+          className={speaking ? "voice-btn speaking" : "voice-btn"}
           style={{
-            fontFamily: "var(--mono)",
-            fontSize: 11,
             background: voice ? "var(--ink)" : "none",
             color: voice ? "var(--ground)" : "var(--ink)",
-            border: "1px solid var(--rule)",
-            padding: "6px 12px",
-            cursor: "pointer",
           }}
         >
-          VOICE {voice ? "ON" : "OFF"}
+          {voice ? (speaking ? "CHIRP ● SPEAKING" : "CHIRP 3 HD ON") : "VOICE OFF"}
         </button>
         <button
           onClick={onOpenControlCentre}

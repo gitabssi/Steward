@@ -6,7 +6,17 @@ import type { LedgerEntry } from "./types";
  *  secondary one, toggled by the operator. The caption carries its
  *  provenance: this is a product surface, not a voice-over. */
 
-export function SystemLine({ entries, voice }: { entries: LedgerEntry[]; voice: boolean }) {
+export function SystemLine({
+  entries,
+  voice,
+  onSpeaking,
+}: {
+  entries: LedgerEntry[];
+  voice: boolean;
+  /** Told when audio starts and stops, so the chrome can show that the
+   *  voice is a live product surface and not a track laid over it. */
+  onSpeaking?: (speaking: boolean) => void;
+}) {
   const [line, setLine] = useState<{ speaker: string; text: string } | null>(null);
   const spoken = useRef(new Set<string>());
   const player = useRef<HTMLAudioElement | null>(null);
@@ -39,8 +49,12 @@ export function SystemLine({ entries, voice }: { entries: LedgerEntry[]; voice: 
           if (!response.headers.get("content-type")?.includes("audio")) return;
           const url = URL.createObjectURL(await response.blob());
           player.current?.pause();
-          player.current = new Audio(url);
-          void player.current.play();
+          const audio = new Audio(url);
+          player.current = audio;
+          audio.onplay = () => onSpeaking?.(true);
+          audio.onended = () => onSpeaking?.(false);
+          audio.onerror = () => onSpeaking?.(false);
+          void audio.play();
         } catch {
           /* captions carry the line */
         }

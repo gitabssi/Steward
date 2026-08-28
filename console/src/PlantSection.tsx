@@ -124,6 +124,26 @@ export function PlantSection({
         .trace-path { stroke-dasharray: 320; animation: tracein 1.4s ease forwards; }
       `}</style>
 
+      {/* The OT boundary. Everything left of this line is the plant's
+          own network; nothing raw crosses it. Gemma reads the raw
+          telemetry here and emits a de-identified summary — which is
+          why the operator's name and the sensor stream never appear
+          anywhere else on this screen. */}
+      <g>
+        <line
+          x1="14" y1="60" x2="14" y2="292"
+          stroke="var(--liquor)" strokeWidth="2" strokeDasharray="6 5"
+        />
+        {/* Set along the boundary itself, so the label cannot collide
+            with the headworks readings that sit just inside it. */}
+        <text
+          x="14" y="176" className="st-label" fill="var(--liquor)"
+          transform="rotate(-90 14 176)" textAnchor="middle"
+        >
+          OT BOUNDARY · GEMMA 4 ON-PLANT · NOTHING RAW CROSSES
+        </text>
+      </g>
+
       {/* ground line */}
       <line x1="12" y1="238" x2="988" y2="238" stroke="var(--rule)" strokeWidth="1.5" />
 
