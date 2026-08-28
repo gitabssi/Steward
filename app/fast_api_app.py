@@ -79,6 +79,13 @@ app.title = "steward"
 app.description = "API for interacting with the Agent steward"
 
 
+# Console surface: the SSE ledger stream, shift state, decisions, the
+# Control Centre routes, and the aggregate finding. See app/console_api.py.
+from app.console_api import attach_console_routes  # noqa: E402
+
+attach_console_routes(app)
+
+
 # Proxy routes so the Vertex AI Console Playground (reasoning_engine SDK) can
 # talk to this agent alongside the native adk_api routes.
 attach_reasoning_engine_routes(app)

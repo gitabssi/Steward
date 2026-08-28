@@ -1,91 +1,83 @@
-# ruff: noqa
-# Copyright 2026 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# ruff: noqa: E402
+"""Steward — the root agent.
 
-import datetime
-from zoneinfo import ZoneInfo
+The conversational face of the fleet: what a judge meets in the ADK
+playground, what Gemini Enterprise registers over A2A, and what the
+Vertex console's Playground drives through the reasoning-engine adapter.
+
+The root agent is an orchestrator in the strict sense: it holds no tools
+of its own and answers nothing from memory that a worker owns. It routes
+to the five workers (each scoped to one station, one facility, one
+authority level — see fleet/agents/workers.py) and it inherits every
+fence the fleet runs: the AuthorityPlugin checks each tool call, the
+supervisor audits worker claims in the shift loop, and irreversible
+actions do not execute without an operator-minted approval token.
+
+The autonomous side of the same fleet — the long-lived shift loop that
+Agent Runtime keeps alive for days — lives in fleet/shift.py and shares
+these exact agent definitions and policies.
+"""
+
+import logging
+import os
 
 from google.adk.agents import Agent
 from google.adk.apps import App
 from google.adk.models import Gemini
 from google.genai import types
-import logging
-from google.adk.plugins.bigquery_agent_analytics_plugin import (
-    BigQueryAgentAnalyticsPlugin,
-    BigQueryLoggerConfig,
-)
-from google.cloud import bigquery
 
+from app.fleet.agents.workers import WORKERS
+from app.fleet.authority import AuthorityPlugin
 
 MODEL = "gemini-3.7-flash"
 
-
-def get_weather(query: str) -> str:
-    """Simulates a web search. Use it get information on weather.
-
-    Args:
-        query: A string containing the location to get weather information for.
-
-    Returns:
-        A string with the simulated weather information for the queried location.
-    """
-    if "sf" in query.lower() or "san francisco" in query.lower():
-        return "It's 60 degrees and foggy."
-    return "It's 90 degrees and sunny."
-
-
-def get_current_time(query: str) -> str:
-    """Simulates getting the current time for a city.
-
-    Args:
-        city: The name of the city to get the current time for.
-
-    Returns:
-        A string with the current time information.
-    """
-    if "sf" in query.lower() or "san francisco" in query.lower():
-        tz_identifier = "America/Los_Angeles"
-    else:
-        return f"Sorry, I don't have timezone information for query: {query}."
-
-    tz = ZoneInfo(tz_identifier)
-    now = datetime.datetime.now(tz)
-    return f"The current time for query {query} is {now.strftime('%Y-%m-%d %H:%M:%S %Z%z')}"
-
-
 root_agent = Agent(
-    name="root_agent",
+    name="steward",
     model=Gemini(
         model=MODEL,
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
-    instruction="You are a helpful AI assistant designed to provide accurate and useful information.",
-    tools=[get_weather, get_current_time],
+    description=(
+        "Steward runs a fleet of long-lived agents beside a part-time "
+        "wastewater operator, forecasting permit exceedances before they "
+        "happen and putting every irreversible decision back in his hands."
+    ),
+    instruction=(
+        "You are Steward's orchestrator for a small municipal water "
+        "reclamation facility. You coordinate five station agents — flow "
+        "warden (headworks), aeration keeper (biology), permit sentinel "
+        "(outfall), weather scout, notification clerk — and route each "
+        "question to the agent whose station it lands on.\n\n"
+        "House rules, absolute:\n"
+        "- Plain, specific, unsentimental. State consequences; never "
+        "editorialize; never thank the user. Say 'the plant', 'the "
+        "watershed', 'the discharge'.\n"
+        "- Numbers come from workers' cited sources, never from your own "
+        "recall. If no worker can source a number, say so.\n"
+        "- No agent — including you — executes an irreversible action. "
+        "Those require the operator's explicit approval in the console. "
+        "The certification of record is his, so the decision is too."
+    ),
+    sub_agents=list(WORKERS.values()),
 )
-import os
 
-# Initialize BigQuery Analytics
-_plugins = []
+# BigQuery Agent Analytics: every agent interaction lands in a queryable
+# dataset next to the EPA corpus the fleet reasons over.
+_plugins = [AuthorityPlugin()]
 _project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
 _dataset_id = os.environ.get("BQ_ANALYTICS_DATASET_ID", "adk_agent_analytics")
 _location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
 
 if _project_id:
     try:
+        from google.adk.plugins.bigquery_agent_analytics_plugin import (
+            BigQueryAgentAnalyticsPlugin,
+            BigQueryLoggerConfig,
+        )
+        from google.cloud import bigquery
+
         bq = bigquery.Client(project=_project_id)
         bq.create_dataset(f"{_project_id}.{_dataset_id}", exists_ok=True)
-
         _plugins.append(
             BigQueryAgentAnalyticsPlugin(
                 project_id=_project_id,
@@ -98,7 +90,7 @@ if _project_id:
             )
         )
     except Exception as e:
-        logging.warning(f"Failed to initialize BigQuery Analytics: {e}")
+        logging.warning(f"BigQuery Analytics not initialized: {e}")
 
 app = App(
     root_agent=root_agent,
