@@ -216,43 +216,48 @@ and reported. The story is about capacity, not safety.
    usually earlier) to the date the report actually reached the
    regulator (`VALUE_RECEIVED_DATE`).
 
-### What the deployed edge actually does, and what it doesn't
+### The edge, live — and what it cost to get there
 
-The boundary in [edge/](edge/) is real and it is the only path plant
-data can take. Two of its three behaviours run live on the deployed
-service and you can check them yourself:
+Gemma runs on the deployed service, on **CPU, no accelerator**. Check
+it yourself:
 
 ```bash
-curl -s https://steward-edge-i64yn4kmyq-uc.a.run.app/health
-curl -s -X POST https://steward-edge-i64yn4kmyq-uc.a.run.app/transcribe \
-  -H 'Content-Type: application/json' \
+EDGE=https://steward-edge-i64yn4kmyq-uc.a.run.app
+curl -s $EDGE/health
+curl -s -X POST $EDGE/transcribe -H 'Content-Type: application/json' \
   -d '{"text":"Dale Whitmore logged blower two at 341 Cedar Road, reach him on 555-201-8899."}'
 # → {"path":"edge-text","text":"[name] logged blower two at [address], reach him on [phone]."}
+
+curl -s -X POST $EDGE/warm       # ~3 min: cold start + loading the weights
+curl -s -X POST $EDGE/summarize -H 'Content-Type: application/json' \
+  -d '{"station":"aeration","readings":{"aeration_do_mg_l":0.9,"mlss_mg_l":2810,"influent_flow_mgd":3.4}}'
+# → {"condition":"watch",
+#    "summary":"Aeration levels are slightly below optimal given the influent flow and blower capacity.",
+#    "notable":["mlss_mg_l: Elevated level suggests potential need for increased aeration."]}
 ```
 
-The third — Gemma summarising raw SCADA readings — needs an
-accelerator. Cloud Run GPUs require quota this project was not granted,
-and on CPU the model's first token outlives the request that asked for
-it. So on the deployed service `/summarize` **fails closed**: it
-returns `raw telemetry withheld at the boundary` rather than passing
-anything through unsummarised. That is the correct failure mode for a
-sovereignty boundary and it is the one we shipped — the boundary holds
-whether or not the model answers.
+Measured: **~180 s** to load the weights once, then **~8 s** per
+summary at 12.8 tokens/second. No GPU, no quota request.
 
-Run the appliance where it actually belongs and the same code path
-returns the structured summary:
+Two failures on the way here are worth writing down, because both
+looked like something else:
 
-```bash
-docker build -t steward-edge:local edge/     # bakes the weights in
-docker run --rm -p 8090:8090 steward-edge:local
-curl -s -X POST localhost:8090/warm
-curl -s -X POST localhost:8090/summarize -H 'Content-Type: application/json' \
-  -d '{"station":"aeration","readings":{"aeration_do_mg_l":0.9,"influent_flow_mgd":3.4}}'
-```
+- It kept dying, and we assumed CPU inference was simply too slow for
+  a request. The logs said otherwise: `Memory limit of 8192 MiB
+  exceeded with 8346 MiB used … terminated on signal 9`. It was being
+  **OOM-killed**, over by 154 MiB. Gemma 4 E2B with a 4096 context
+  needs more than 8 GiB; it runs fine in 16.
+- Then it answered in 16 s with an **empty summary**. Gemma 4 reasons
+  before it responds, and that reasoning spends the same token budget —
+  the whole 160-token cap went to thinking and the answer was never
+  emitted. Thinking is off and the budget is real.
 
-That this is more faithful than the cloud deployment is the point: the
-appliance is supposed to sit inside the plant's network, not in a
-region.
+An empty completion now **raises** rather than returning a blank
+summary. For this service in particular, reporting "condition: normal"
+because the model said nothing would be the worst available failure.
+When inference genuinely can't run, `/summarize` fails closed — `raw
+telemetry withheld at the boundary` — because a sovereignty boundary
+that fails open is not a boundary.
 
 ### Which screener ran, and why the ledger says so
 
@@ -395,13 +400,12 @@ registry does real work.
 - **Gemma 4** — self-hosted in [edge/](edge/) (Ollama, weights baked
   into the container), reading raw SCADA telemetry and dictated round
   notes *inside* the OT boundary and emitting de-identified summaries —
-  the data-sovereignty enforcement point, not a checkbox. The deployed
-  service runs **E2B** because it sits on Cloud Run's CPU, where E4B's
-  first token outlives a request; both are Gemma 4 edge models with
-  native audio, the appliance this stands in for carries an
-  accelerator, and `--build-arg EDGE_MODEL=gemma4:e4b` switches it. The
-  property being demonstrated — raw plant data never crossing the
-  boundary — is identical either way.
+  the data-sovereignty enforcement point, not a checkbox. Live on the
+  deployed service, on CPU: ~8 s per summary once resident. The build
+  uses **E2B**; `--build-arg EDGE_MODEL=gemma4:e4b` switches to the
+  larger sibling where there is an accelerator. Both are Gemma 4 edge
+  models with native audio, and the property being demonstrated — raw
+  plant data never crossing the boundary — is identical either way.
 - **TimesFM 2.5** — BigQuery ML `AI.FORECAST` quantile output; powers
   the national backtest and the exceedance-probability framing.
 - **Chirp 3 HD** — the system's voice in product (`/api/speak`, VOICE

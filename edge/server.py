@@ -71,13 +71,19 @@ def deidentify(text: str) -> str:
 GENERATE_TIMEOUT_S = int(os.environ.get("EDGE_TIMEOUT_S", "480"))
 
 
-def ollama_generate(prompt: str, num_predict: int = 160) -> str:
+def ollama_generate(prompt: str, num_predict: int = 384) -> str:
     body = json.dumps(
         {
             "model": MODEL,
             "prompt": prompt,
             "stream": False,
             "keep_alive": "30m",
+            # Gemma 4 reasons before it answers, and that reasoning is
+            # billed against the same token budget: at 160 tokens the
+            # whole budget went to thinking and the answer came back
+            # empty. The appliance wants a three-field condition, not a
+            # deliberation, so thinking is off and the budget is real.
+            "think": False,
             "options": {
                 "temperature": 0.1,
                 "num_predict": num_predict,
@@ -119,6 +125,11 @@ def summarize(telemetry: Telemetry) -> dict:
             'no names, no locations>", "notable": ["<key>: <why>"]}. '
             f"Readings for {telemetry.station}: {json.dumps(telemetry.readings)}"
         )
+        if not raw.strip():
+            # An empty completion is a failure, not a clean bill of
+            # health. Saying "condition: normal" here would be the worst
+            # possible lie for this particular service.
+            raise RuntimeError("model returned no completion")
         match = re.search(r"\{.*\}", raw, re.DOTALL)
         parsed = json.loads(match.group(0)) if match else {"condition": "watch", "summary": raw[:200]}
         parsed["summary"] = deidentify(str(parsed.get("summary", "")))
