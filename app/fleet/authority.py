@@ -109,14 +109,19 @@ class FleetPolicy:
         self.tools[tool_name] = policy
 
     def set_authority(self, agent_name: str, authority: Authority, by: str) -> None:
-        """Operator promotes or demotes an agent, live."""
+        """Operator promotes or demotes an agent, live. An explicit
+        authority change by the operator also reinstates a quarantined
+        agent — the human outranks the supervisor, on the record."""
         grant = self.grants[agent_name]
         previous = grant.authority
         grant.authority = authority
+        reinstated = grant.quarantined
+        grant.quarantined = False
         BUS.record(
             EventKind.AGENT_STATE,
             grant.identity,
-            f"authority {previous.name.lower()} → {authority.name.lower()}",
+            f"authority {previous.name.lower()} → {authority.name.lower()}"
+            + (" — reinstated from quarantine by the operator" if reinstated else ""),
             Outcome.ALLOW,
             changed_by=by,
         )
@@ -180,13 +185,9 @@ class AuthorityPlugin(BasePlugin):
                         tool_args["agent_name"] = agent_name
                 except (TypeError, ValueError):
                     pass
-            BUS.record(
-                EventKind.AGENT_STATE,
-                identity,
-                f"tool {tool.name}",
-                Outcome.ALLOW,
-                reason=reason,
-            )
+            # Allowed calls are recorded by the tools themselves (scoped
+            # reads by the ScopedReader, actions at their point of effect)
+            # — one row per act, not one per fence passed.
             return None  # proceed with the real tool call
         BUS.record(
             EventKind.DENIAL,

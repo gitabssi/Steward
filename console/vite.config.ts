@@ -5,6 +5,8 @@ import { defineConfig } from "vite";
 // /api is proxied to the fleet's FastAPI app (SSE included).
 export default defineConfig({
   plugins: [react()],
+  base: "./", // served at /console/ by the fleet service
+
   server: {
     port: 5173,
     proxy: {

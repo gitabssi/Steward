@@ -13,6 +13,7 @@ export default function App() {
   const { entries, state, live } = useFleet();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [capacityDismissed, setCapacityDismissed] = useState(false);
+  const [voice, setVoice] = useState(false);
 
   const capacityEntry = useMemo(
     () => [...entries].reverse().find((entry) => entry.kind === "capacity"),
@@ -22,10 +23,16 @@ export default function App() {
   return (
     <>
       <div className="console">
-        <TopBar state={state} live={live} onOpenControlCentre={() => setDrawerOpen(true)} />
+        <TopBar
+          state={state}
+          live={live}
+          voice={voice}
+          onToggleVoice={() => setVoice((v) => !v)}
+          onOpenControlCentre={() => setDrawerOpen(true)}
+        />
         <div className="region plant">
           <PlantSection state={state} entries={entries} live={live} />
-          <SystemLine entries={entries} />
+          <SystemLine entries={entries} voice={voice} />
         </div>
         <PermitLines state={state} />
         <Queue pending={state?.pending ?? []} />

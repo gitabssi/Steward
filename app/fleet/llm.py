@@ -14,6 +14,7 @@ ever silent.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import uuid
@@ -68,7 +69,15 @@ class ReasoningPool:
     ) -> Reasoned:
         envelope = TaskEnvelope(agent_name=agent.name, task=prompt[:80])
         try:
-            raw_text = await self._invoke(agent, prompt, envelope)
+            try:
+                raw_text = await self._invoke(agent, prompt, envelope)
+            except Exception as exc:
+                if "429" not in str(exc) and "RESOURCE_EXHAUSTED" not in str(exc):
+                    raise
+                # Shared-quota throttling deserves one paced retry before
+                # the deterministic fallback takes over.
+                await asyncio.sleep(12)
+                raw_text = await self._invoke(agent, prompt, envelope)
             parsed = _parse_contract(raw_text)
         except Exception as exc:
             BUS.record(

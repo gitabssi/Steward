@@ -43,6 +43,10 @@ def _ensure_shift() -> None:
     uvicorn locally, Cloud Run, and Agent Runtime.
     """
     seed = os.environ.get("STEWARD_FACILITY_SEED", "fixtures/seeds/cedar-ridge.json")
+    if not os.path.isabs(seed):
+        # Anchor to the repo root so the loop boots regardless of the
+        # process's working directory (uvicorn, Agent Runtime, tests).
+        seed = os.path.join(os.path.dirname(os.path.dirname(__file__)), seed)
     if os.environ.get("STEWARD_SHIFT", "1") == "1" and os.path.exists(seed):
         shift.boot(seed)
 

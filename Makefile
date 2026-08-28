@@ -46,8 +46,12 @@ backtest:
 	bq --project_id=$(PROJECT) query --use_legacy_sql=false < data/sql/02_forecast.sql
 	bq --project_id=$(PROJECT) query --use_legacy_sql=false < data/sql/03_finding.sql
 
+# The aiplatform pin works around a version skew in agents-cli 1.4.1
+# (it imports a pre-rename symbol; 2.0.1 renamed agent engines → runtimes).
 deploy:
-	uvx google-agents-cli deploy
+	uvx --with 'google-cloud-aiplatform==2.0.0' google-agents-cli deploy \
+	  --project $(PROJECT) --region $(REGION) --agent-identity \
+	  --update-env-vars "GOOGLE_GENAI_USE_VERTEXAI=true,GOOGLE_CLOUD_PROJECT=$(PROJECT),GOOGLE_CLOUD_LOCATION=global,BQ_DATASET=steward_npdes"
 
 deploy-run:
 	gcloud run deploy steward-fleet --source . --region $(REGION) \

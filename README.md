@@ -6,27 +6,48 @@ Steward runs a fleet of long-lived agents beside a part-time wastewater
 operator, forecasting permit exceedances before they happen and putting
 every irreversible decision back in his hands.
 
-About half of the drinking-water intakes serving larger communities in
-the continental US sit downstream of somebody's wastewater discharge.
-The facilities are permitted, sampled, and reported — and at thousands of
-small municipal plants, one person watches. Part-time. Often across
-several sites. He holds a state certification and personal legal
-responsibility for everything that leaves the outfall. Steward is built
-for him: a **watershed steward**, the *Unlikely Hero* of this fleet —
-critical, misrespected, and outside every standard corporate role.
+![Steward architecture](docs/architecture.svg)
 
-**The finding this repo can reproduce** (every number written by
-[data/sql/03_finding.sql](data/sql/03_finding.sql), none typed by hand):
+**Live right now**
+- Operator console (Cloud Run): **https://steward-fleet-649854119911.us-central1.run.app/console/**
+- Fleet API / A2A / audit-ledger SSE: `https://steward-fleet-649854119911.us-central1.run.app` (`/api/state`, `/api/events`, `/api/finding`)
+- State primacy agency publisher (the second department): `https://primacy-agency-649854119911.us-central1.run.app/.well-known/agent-card.json`
+- Long-lived fleet on **Vertex AI Agent Runtime**: reasoning engine `6520690542165098496`, `us-central1`, agent identity enabled
+
+**The finding this repo reproduces** — every number written by
+[data/sql/03_finding.sql](data/sql/03_finding.sql), none typed by hand:
 
 > Across **10,396 real municipal facilities** and **6,030,868 real
 > reported discharge values** from the EPA's public NPDES record
 > (2019-10 → 2025-09), this fleet's TimesFM forecast would have flagged
 > **53.9%** of the **18,338 permit exceedances that actually occurred**
 > in a held-out six-month window — a median of **51 days** before the
-> monthly report surfaced them. Precision 25.2%, with 7.7% of
-> series-months flagged. Enforceable limits only.
+> monthly report surfaced them. Precision 25.2% at a 3.6% base rate (a
+> 7× enrichment). Enforceable limits only.
 
-*Built solo, in Casablanca, for the All Things Agentic Hackathon
+## Why this exists
+
+About half of the drinking-water intakes serving larger communities in
+the continental US sit downstream of somebody's wastewater discharge —
+the EPA calls it *de facto reuse*. The facilities are permitted, sampled
+and reported, and at thousands of small municipal plants **one person
+watches. Part-time. Often across three sites. Alone.** He holds a state
+certification and personal legal responsibility for everything that
+leaves the outfall. The *Unlikely Hero* here is not a persona invented
+for a hackathon; he is a job classification with a licence number.
+
+Steward gives him a fleet of five station agents — flow at the
+headworks, biology on the aeration basin, the permit at the outfall,
+weather over the creek, a clerk who only drafts — plus a supervisor that
+audits every claim against its cited source, an arbiter that resolves
+agents that disagree in the open, and a registry that mounts
+cross-department specialists live. The fleet's weekly deliverable, the
+**Capacity Assessment**, is evidence of what it *could not* do: which
+obligations were degraded, and what capacity it would take to stop
+having to choose. A multi-agent system that ends by documenting the
+limits of automation.
+
+*Built solo in Casablanca for the All Things Agentic Hackathon
 (Fortified Enterprise Fleet track). Created for the purposes of entering
 this hackathon.*
 
@@ -38,26 +59,24 @@ this hackathon.*
 # local, one command (fleet API :8000, primacy publisher :8091, console :5173)
 make install && make dev
 
-# deploy: fleet → Vertex AI Agent Runtime (long-lived, ≤7-day sessions)
+# the tests a review tool should run first — 22 policy tests, no cloud needed
+make test
+
+# deploy: fleet → Vertex AI Agent Runtime (long-lived, agent identity)
 make deploy
 
 # deploy: everything → Cloud Run (fleet+console, primacy publisher, Gemma edge)
 make deploy-all
 
-# the tests a review tool should run first
-make test
+# rebuild the data spine and the finding from the public record
+make data && make backtest
 ```
 
 [![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run?git_repo=https://github.com/gitabssi/Steward)
 
-Auth is Application Default Credentials or Workload Identity throughout.
-There are **no keys, tokens, or credentials anywhere in this repo or its
-history**; `.env.example` documents every variable.
-
-To rebuild the data spine from the public record: `make data` (pulls
-~4 GB of EPA zips, streams ~160M rows down to 66M reported values, loads
-BigQuery), then `make backtest` (three SQL files, in order; the last one
-writes the `finding` table quoted above).
+Auth is Application Default Credentials / Workload Identity throughout.
+**No keys, tokens, or credentials exist anywhere in this repo or its
+history**; [.env.example](.env.example) documents every variable.
 
 ---
 
@@ -65,18 +84,18 @@ writes the `finding` table quoted above).
 
 | Path | What it is |
 |---|---|
-| [app/agent.py](app/agent.py) | Root orchestrator (ADK). What the playground, A2A, and Vertex console talk to |
+| [app/agent.py](app/agent.py) | Root orchestrator (ADK). What the playground, A2A, and the Vertex console talk to |
 | [app/fleet/](app/fleet/) | The fleet: [authority.py](app/fleet/authority.py) (observe/recommend/act, enforced per tool call), [identity.py](app/fleet/identity.py) (per-facility scope; cross-facility reads denied), [supervisor.py](app/fleet/supervisor.py) (claim audit → quarantine → re-issue), [arbiter.py](app/fleet/arbiter.py) (agents that disagree), [guards.py](app/fleet/guards.py) (Model Armor at the document boundary), [registry.py](app/fleet/registry.py) (catalog cache + live A2A resolve), [memory.py](app/fleet/memory.py) (learned facts w/ observation counts), [events.py](app/fleet/events.py) (the audit ledger), [shift.py](app/fleet/shift.py) (the long-lived loop Agent Runtime keeps alive) |
 | [app/fleet/agents/workers.py](app/fleet/agents/workers.py) | The five station agents and the mounted specialist — personas, tools, grants |
-| [app/console_api.py](app/console_api.py) | SSE ledger stream + the operator's narrow write paths |
+| [app/console_api.py](app/console_api.py) | SSE ledger stream, the operator's narrow write paths, Chirp voice out |
 | [console/](console/) | The operator's console (React/Vite): a cross-section of the plant, not a dashboard |
-| [fixtures/](fixtures/) | The honest simulation boundary: [replay.py](fixtures/replay.py) interpolates telemetry *between* real reported values; [seeds/](fixtures/seeds/) hold world facts only — never agent behaviour |
+| [fixtures/](fixtures/) | The honest simulation boundary: [replay.py](fixtures/replay.py) interpolates telemetry *between* real reported values; [seeds/](fixtures/seeds/) hold world facts only — never agent behaviour (that boundary has a test) |
 | [data/](data/) | The real-data spine: EPA pull/prepare/load scripts and the three backtest SQL files |
 | [edge/](edge/) | Self-hosted Gemma inside the OT boundary (its own Cloud Run service) |
 | [primacy/](primacy/) | The state primacy agency's A2A publisher — the second department |
 | [deployment/](deployment/) | Terraform (single-project + CI/CD with Workload Identity Federation), generated by agents-cli |
 | [docs/operations.md](docs/operations.md) | Failure and recovery: quarantine, token runaway, endpoint fallback, partial failure |
-| [tests/unit/test_fleet.py](tests/unit/test_fleet.py) | The fences, tested: 22 policy tests |
+| [tests/unit/test_fleet.py](tests/unit/test_fleet.py) | The fences, tested |
 
 ---
 
@@ -87,106 +106,97 @@ from **two publishers**: the Steward fleet, and the **state primacy
 agency** ([primacy/](primacy/)) — a separate service under its own
 identity. The wet-weather bypass specialist is deliberately absent from
 the boot catalog; when an emerging condition surfaces the role, the
-fleet resolves it live from the agency's A2A agent card and mounts it
-**cross-department**, with recommend authority and single-facility
-scope. The Control Centre shows both publishers side by side. The fleet
-itself is published over A2A (agent card at `/.well-known/agent-card.json`)
-and registered on the platform's own Agent Registry via Agent Runtime
-deployment — we use the platform registry, not a hand-rolled one.
+fleet resolves it **live** from the agency's A2A agent card (latency
+measured, in the ledger) and mounts it cross-department with recommend
+authority and single-facility scope. The Control Centre shows both
+publishers side by side. The fleet itself is served over A2A and
+registered on the **platform's own Agent Registry** via Agent Runtime
+deployment — not a hand-rolled catalog.
 
 **Safely maintain context across weeks of asynchronous operations.**
-The shift loop is deployed to **Vertex AI Agent Runtime** as a
-long-lived job; state that must survive it lives outside it (Firestore
-for live state, **Memory Bank** for learned facts, BigQuery for the
-record). Memory is observation-counted (*"Operator chooses tanker haul
-over bypass — 7 of 7"*) and cited at the moment of decision, so weeks of
-context are visible where they earn their keep: escalations fell from 22
-sent/4 acted-on to 6 sent/5 acted-on as the fleet learned what deserves
-this operator's attention. A covering operator inherits the reasoning,
+The shift loop deploys to **Vertex AI Agent Runtime** as a long-lived
+job; state that must survive it lives outside it (Firestore live state,
+**Memory Bank** learned facts, BigQuery record). Memory is
+observation-counted (*"Operator chooses tanker haul over bypass — 7 of
+7"*) and cited at the moment of decision — *"Not escalating: you
+dismissed this same pattern four times in three weeks."* The escalation
+curve (22 sent/4 acted-on on day one → 6 sent/5 acted-on now) makes the
+learning measurable, and a covering operator inherits the reasoning,
 not a spreadsheet.
 
-**Interact with production data without violating enterprise compliance,
-data sovereignty, or security policies.** The production data is real:
-the EPA's national NPDES compliance record in BigQuery, and per-facility
-scoping over it is genuine multi-tenancy — an agent scoped to one
-facility that requests another's records is **denied**, and the denial
-is an attributed ledger row with a trace id. **Data sovereignty** is
-enforced at the OT boundary: raw SCADA telemetry and the operator's
+**Interact with production data without violating enterprise
+compliance, data sovereignty, or security policies.** The production
+data is real — the EPA's national compliance record in BigQuery — and
+per-facility scoping over it is genuine multi-tenancy: an agent scoped
+to one facility that requests another's records is **denied**, and the
+denial is an attributed ledger row with a trace id. **Data sovereignty**
+is enforced at the OT boundary: raw SCADA telemetry and the operator's
 dictated voice notes never leave the plant segment — Gemma reads them
-*inside* ([edge/](edge/)) and emits structured, de-identified summaries.
-Gemma runs self-hosted rather than via API because the entire
-justification is that raw plant data cannot leave the network boundary —
-an API call would defeat the property it exists to demonstrate. Inbound
-documents cross a Model Armor screen before any model context sees them.
-Every irreversible action requires a single-use approval token that only
-the operator's confirmed decision can mint.
+*inside* ([edge/](edge/)) and emits structured, de-identified
+summaries. **Gemma runs self-hosted rather than via API because the
+entire justification is that raw plant data cannot leave the network
+boundary — an API call would defeat the property it exists to
+demonstrate.** Inbound documents cross a Model Armor screen before any
+model context sees them. Irreversible actions require a single-use
+token minted only by the operator's confirmed decision.
 
 ## Why this fleet is deliberately not fully autonomous
 
-The operator carries the legal responsibility personally: his state
+The operator carries the legal responsibility personally: his
 certification is on the line, not the software's. A fleet cannot hold a
 permit, cannot be cited, cannot lose a licence — so it must not take an
-action whose consequence it cannot carry. Authority is a three-level,
-per-tool-call enforcement (observe / recommend / act), the operator can
-promote or demote any agent live, and the weekly deliverable — the
-**Capacity Assessment** — is evidence of what the fleet *could not* do:
-which obligations were degraded, and what capacity it would take to stop
-having to choose.
+action whose consequence it cannot carry. Authority is enforced per
+tool call at three levels (observe / recommend / act); the operator can
+promote, demote, or reinstate any agent live; and nothing irreversible
+executes without his readback-and-confirm. Visible restraint is the
+design, not a limitation of it.
 
 ## Why the facility is de-identified
 
 The dataset behind this project describes real towns and real,
-identifiable, mostly under-resourced public employees. Naming a specific
-facility's violations in a demo would be unfair to people who show up to
-hard jobs, and would imply conclusions a backtest cannot support. So:
-
-- **The backtest is reported in aggregate only** — across 10,396
-  facilities, none named, no jurisdiction singled out. Aggregate is
-  safer *and* statistically stronger.
-- **The demo facility ("Cedar Ridge") is a representative composite**:
-  real permit structure, real limit values drawn from the public record
-  for small municipal plants, fictional name and geography. The video
-  labels it as such on screen.
-- **The repo is fully reproducible** — scripts, SQL, and methodology are
-  public, so anyone can re-derive the aggregate finding. Verifiability
-  lives in the repo; anonymity lives in the video.
-- Nothing in this project states or implies that any specific
-  community's water is unsafe. These facilities are permitted, sampled,
-  and reported. The story here is about capacity, not safety.
+identifiable, mostly under-resourced public employees. Naming a
+specific facility's violations in a demo would be unfair to people who
+show up to hard jobs, and would imply conclusions a backtest cannot
+support. So: the backtest is **aggregate only** — 10,396 facilities,
+none named, no jurisdiction singled out (aggregate is safer *and*
+statistically stronger); the demo facility ("Cedar Ridge") is a
+representative composite — real permit structure and real limit values
+from the public record for small municipal plants, fictional name and
+geography, labeled as such on screen; and the repo is fully
+reproducible, so verifiability lives here while anonymity lives in the
+video. Nothing in this project states or implies that any specific
+community's water is unsafe. These facilities are permitted, sampled,
+and reported. The story is about capacity, not safety.
 
 ## Backtest methodology — and its limitations
 
-Three SQL files, run in order against the loaded corpus
-([data/sql/](data/sql/)):
+1. **Series** ([01_series.sql](data/sql/01_series.sql)): one series per
+   facility × outfall × parameter × statistical base, monthly, POTWs
+   only, effluent-gross monitoring, **enforceable limits only**
+   (`LIMIT_TYPE_CODE = 'ENF'` — never alert/benchmark thresholds),
+   upper-bound limits. Eligibility: ≥24 of the 30 months before the
+   2025-03 cutoff. Test window 2025-04 → 2025-09, never seen by the
+   model.
+2. **Forecast** ([02_forecast.sql](data/sql/02_forecast.sql)):
+   **TimesFM via BigQuery ML `AI.FORECAST`** — serverless, no endpoint.
+   The flag uses the **90th-percentile band**, not the point forecast:
+   a permit is a question about the bad tail.
+3. **Finding** ([03_finding.sql](data/sql/03_finding.sql)): a month is
+   *flagged* if P90 crosses the limit in force; an *exceedance* if the
+   facility actually reported above it. Lead time is conservative: from
+   the first day of the exceedance month (the flag existed by then —
+   usually earlier) to the date the report actually reached the
+   regulator (`VALUE_RECEIVED_DATE`).
 
-1. **Series** ([01](data/sql/01_series.sql)): one series per facility ×
-   outfall × parameter × statistical base, monthly, POTWs only, effluent
-   gross monitoring, **enforceable limits only** (`LIMIT_TYPE_CODE =
-   'ENF'` — never alert/benchmark thresholds), upper-bound limits
-   (`≤`). Eligibility: ≥24 of the 30 months before the 2025-03 cutoff.
-   Test window: 2025-04 → 2025-09, never seen by the model.
-2. **Forecast** ([02](data/sql/02_forecast.sql)): **TimesFM via BigQuery
-   ML `AI.FORECAST`** — serverless, no endpoint. The exceedance flag
-   uses the **90th-percentile band**, not the point forecast: a permit
-   is a question about the bad tail.
-3. **Finding** ([03](data/sql/03_finding.sql)): a month is *flagged* if
-   P90 crosses the limit in force; an *exceedance* if the facility
-   actually reported above it. Lead time is conservative: from the first
-   day of the exceedance month (the flag existed by then; usually
-   earlier) to the date the DMR actually reached the regulator
-   (`VALUE_RECEIVED_DATE`).
-
-**Limitations, stated plainly.** Recall is 53.9% — trend-driven
-exceedances are the catchable half; sudden upsets (equipment failure,
-slug loads) are not in last month's curve, which is exactly why the
-fleet also watches live telemetry. Precision is 25.2% — one flag in four
-preceded a real exceedance month; at a 3.6% base rate that is a 7×
-enrichment, and the product treats a flag as "worth an operator's
-attention," not an alarm. Monthly averages hide within-month structure.
-Facilities that stopped reporting are absent by construction. The
-composite demo facility's high-frequency telemetry is interpolated —
-real plants have it; the public record does not (monthly reported
-values, limits, and exceedances are real).
+**Limitations, stated plainly.** Recall 53.9%: trend-driven exceedances
+are the catchable half; sudden upsets are not in last month's curve —
+which is why the fleet also watches live telemetry. Precision 25.2%: a
+flag means "worth an operator's attention," not an alarm. Monthly
+averages hide within-month structure. Facilities that stopped reporting
+are absent by construction. And the demo facility's high-frequency
+telemetry is **interpolated** — real plants have it; the public record
+does not. Monthly reported values, permit limits, and exceedances are
+real.
 
 ## Separation of concerns — who may do what, and why
 
@@ -201,80 +211,87 @@ values, limits, and exceedances are real).
 | supervisor | — | — | audit claims, quarantine, re-issue | speak to the operator in workers' place |
 | operator | — | — | everything irreversible | be replaced |
 
-Enforcement is structural, not rhetorical: the `AuthorityPlugin` checks
-every tool call against the grant, the `ScopedReader` checks facility
-scope inside data tools, and both outcomes — allowances *and* denials —
-are attributed ledger rows carrying Cloud Trace ids.
+Enforcement is structural: the `AuthorityPlugin` checks every tool call
+against the grant, the `ScopedReader` checks facility scope inside data
+tools, and both allowances *and* denials are attributed ledger rows
+carrying Cloud Trace ids.
 
-## Failure tolerance
+## Failure tolerance — the questions judges asked, answered by name
 
-Quarantine-on-unsourced-claims, step budgets and wall-clock ceilings for
-token runaway, documented model-endpoint fallbacks that are never
-silent, and a console that degrades rather than blanks — all specified
-with code pointers in [docs/operations.md](docs/operations.md), all
-tested in [tests/unit/test_fleet.py](tests/unit/test_fleet.py).
+A worker that **hallucinates**: every numeric claim must cite a source;
+the supervisor reads cited sensors itself; no source or a contradiction
+→ the claim is withheld, the worker quarantined live, the task
+re-issued — and the operator hears five words: *"That number never
+reached you."* A worker that **loops**: step budgets (24) and
+wall-clock ceilings (120 s) charged in the same loop that would spend
+the tokens; exhaustion is a quarantine, not a retry storm. A **model
+endpoint down**: deterministic fallback with a ledger row that says so —
+never silent. **Partial fleet failure**: contained per tick; the
+console degrades (`DEGRADED — last known state shown`, breathing
+frozen), it never blanks. Details with code pointers:
+[docs/operations.md](docs/operations.md).
 
 ## Registry deviation, stated deliberately
 
-Google's guidance recommends resolving agents once at startup for
-latency. Steward caches the catalog at boot **and** resolves live on a
-miss, because an emerging condition at a plant can surface a role nobody
-catalogued for it — a permitted wet-weather bypass is exactly such a
-role. Resolution latency is measured and shown in the ledger: at the
-moment it matters, it is evidence the registry does real work.
+Platform guidance says resolve agents once at startup for latency.
+Steward caches at boot **and** resolves live on a miss, because an
+emerging condition can surface a role nobody catalogued — a permitted
+wet-weather bypass is exactly such a role. Resolution latency is
+measured and shown; at the moment it matters it is evidence the
+registry does real work.
 
 ## Insights hit while implementing
 
-- **`VALUE_RECEIVED_DATE` is the whole product, hiding in a public CSV.**
-  The EPA record doesn't just say what was exceeded — it says *when the
-  regulator found out*. The median gap between an exceedance month
-  beginning and its report arriving is what makes "51 days early" a
-  measured number instead of a marketing claim.
+- **`VALUE_RECEIVED_DATE` is the whole product, hiding in a public
+  CSV.** The EPA record doesn't just say what was exceeded — it says
+  *when the regulator found out*. That one column turns "early warning"
+  from a claim into a measurement.
 - **Enforceable-vs-monitoring is the trap in this dataset.** Most DMR
-  rows carry limits that are *not* enforceable (`MON`, benchmarks).
-  Mixing them inflates every metric and a domain-aware reviewer would
-  catch it. `LIMIT_TYPE_CODE = 'ENF'` appears in every WHERE clause that
-  feeds a reported number.
+  rows carry limits that are *not* enforceable. Mixing them inflates
+  every metric in a way a domain-aware reviewer would catch;
+  `LIMIT_TYPE_CODE = 'ENF'` is in every WHERE clause that feeds a
+  reported number.
 - **The quantile is the honest interface to a forecast.** A point
-  forecast of 28 mg/L against a 30 limit says "fine." The P90 crossing
-  the line says "one month in ten, this goes wrong" — which is the
-  sentence an operator can actually act on. `AI.FORECAST`'s interval
-  made this a one-line choice.
+  forecast of 28 against a 30 limit says "fine." A P90 crossing the
+  line says "one month in ten this goes wrong" — the sentence an
+  operator can act on.
+- **The supervisor taught us humility, live.** A Gemini worker guessed
+  a facility id it wasn't scoped to (denied, correctly — but the
+  exception design aborted the flow); then the supervisor quarantined
+  healthy workers for citing sources it couldn't independently read.
+  Both incidents became policy: denials are structured data a model can
+  read; unverifiable citations pass but are recorded as such; only *no
+  source* or *contradiction* quarantines.
 - **Denials are the cheapest UI you can build.** Rendering DENY rows in
   the same ledger as everything else made half the security story
   visible with zero extra product surface.
-- **A fallback that logs itself changes how you build.** Once "model
-  endpoint unavailable — deterministic fallback used" was a ledger row,
-  every degradation path became something we could demo instead of hide.
 
 ## Things we're proud of that didn't fit in the video
 
-- The **single-use approval token** design: minted only by the
-  operator's confirmed decision, bound to one action fingerprint,
-  burned on redemption. `TestApprovalVault` proves a replay fails.
+- The **single-use approval token**: minted only by the operator's
+  confirmed decision, bound to one action fingerprint, burned on
+  redemption — `TestApprovalVault` proves a replay fails.
 - The seed/behaviour boundary has a **test**: the seed file may not
-  contain the words that would script the fleet's responses
-  (`TestWorld::test_seed_contains_world_facts_not_agent_behaviour`).
-- `finding_by_parameter` — recall and lead per pollutant across the
-  national record. Ammonia and TSS, the demo's two axes, are also where
-  the forecast earns its keep nationally.
-- The whole product is **one Cloud Run URL**: `/console` for the
-  operator, `/api` for the ledger, `/a2a` for other fleets, ADK's dev UI
-  for judges.
-- 66M rows of federal CSV → BigQuery on a normal laptop, streamed
-  straight out of the zips, with nothing unpacked to disk
+  contain words that would script the fleet's responses.
+- `finding_by_parameter`: recall and lead time per pollutant across the
+  national record — ammonia and solids, the demo's two axes, are also
+  where the forecast earns its keep nationally.
+- One Cloud Run URL is the whole product: `/console` for the operator,
+  `/api` for the ledger, `/a2a` for other fleets, ADK's dev UI for
+  judges.
+- 66M rows of federal CSV → BigQuery on a laptop, streamed straight out
+  of the zips, nothing unpacked to disk
   ([data/prepare_dmrs.py](data/prepare_dmrs.py)).
 
 ## Google Cloud, load-bearing
 
 | Piece | Where it works |
 |---|---|
-| **Agent Runtime** | The shift loop, deployed long-lived (`make deploy`); uptime is the proof the fleet holds context across days |
+| **Agent Runtime** | The fleet, deployed long-lived with `--agent-identity` (`make deploy`); the platform serves its A2A card |
 | **Agent Registry + A2A** | Platform registry via Agent Runtime; live cross-department resolve of the primacy agency's card |
-| **Agent Identity** | Per-facility scoping — `--agent-identity` at deploy; in-process grants mirror it per agent |
-| **BigQuery** | The national NPDES corpus (39M reported values), the backtest, and ADK's BigQuery Agent Analytics plugin |
-| **Memory Bank** | Learned facts behind [app/fleet/memory.py](app/fleet/memory.py) when deployed on Agent Runtime |
-| **Model Armor** | Inbound document screen ([app/fleet/guards.py](app/fleet/guards.py)), local fallback recorded when unconfigured |
+| **BigQuery** | The national NPDES corpus (66M reported values), the backtest, ADK's BigQuery agent-analytics plugin |
+| **Memory Bank** | Learned-facts backend on Agent Runtime ([app/fleet/memory.py](app/fleet/memory.py)); local store otherwise, recorded either way |
+| **Model Armor** | Inbound document screen ([app/fleet/guards.py](app/fleet/guards.py)); local fallback recorded when unconfigured |
 | **Cloud Trace / Logging** | Every ledger row carries the active trace id; the video holds console and Cloud Trace side by side |
 | **Firestore** | Live per-facility state and the persisted ledger |
 | **Cloud Run** | Fleet+console, the primacy publisher, and the Gemma edge — three services, three identities |
@@ -284,17 +301,62 @@ moment it matters, it is evidence the registry does real work.
 
 - **Gemma 4 E4B** — self-hosted in [edge/](edge/) (Ollama, weights in
   the container), reading raw SCADA telemetry and dictated round notes
-  *inside* the OT boundary and emitting de-identified summaries; the
-  data-sovereignty answer, not a checkbox.
-- **TimesFM 2.5** — via BigQuery ML `AI.FORECAST` with quantile output;
-  powers the national backtest and the exceedance-probability framing.
-- **Chirp 3 HD** — the system's voice in product: the fleet's utterances
-  and decision readbacks, spoken (`/api/speak`), captioned on screen.
-  (Streaming sessions cap ~5 min and rotate; SSML unsupported on
-  streaming HD.)
+  *inside* the OT boundary and emitting de-identified summaries — the
+  data-sovereignty enforcement point, not a checkbox.
+- **TimesFM 2.5** — BigQuery ML `AI.FORECAST` quantile output; powers
+  the national backtest and the exceedance-probability framing.
+- **Chirp 3 HD** — the system's voice in product (`/api/speak`, VOICE
+  toggle in the console), captioned on screen. Streaming sessions cap
+  ~5 min and rotate; SSML unsupported on streaming HD.
 - **WeatherNext 2 is deliberately not claimed** — the fleet consumes
   forecast *data* via BigQuery, which is not a model integration.
-  Described precisely or not at all.
 
 *A build write-up and a 15-second vertical cut are linked from the
 Devpost submission.*
+
+---
+
+## Screenshots
+
+**A quiet night.** The console is a cross-section of the plant, not a
+dashboard — headworks to outfall to the creek, and from the first frame
+the marker that explains why any of it matters: a municipal intake,
+12,400 served, 8.2 miles downstream. The audit ledger is on screen the
+entire session.
+
+![Calm](docs/screenshots/s1-calm.png)
+
+**The coupling.** An infiltration surge; the biology starves; the
+aeration keeper proposes raising the blowers; the flow warden prices the
+retention-time cost; the permit sentinel says which limit breaches
+first. One proposed action, two counter-consequences, three agents —
+escalated to the operator with the full costed option set.
+
+![Coupling](docs/screenshots/s2-coupling.png)
+
+**"That number never reached you."** The supervisor catches a claim
+that contradicts the live sensor it should have read, quarantines the
+worker on the spot — red at its station — and the withheld claim never
+reaches the operator.
+
+![Quarantine](docs/screenshots/s3-quarantine.png)
+
+**The Control Centre.** Every agent inspectable: identity, scope,
+authority as a live control (observe / recommend / act), the registry
+with **two publishers** side by side, and the learned facts — none of
+which existed on day one.
+
+![Control Centre](docs/screenshots/s4-controlcentre.png)
+
+**The decision.** One tanker, three obligations. The fleet costs the
+options; the operator chooses; readback, confirm — only then is the
+single-use approval token minted and the irreversible tool allowed to
+run. Whatever he doesn't pick, the cost is recorded.
+
+![Decision](docs/screenshots/s5-decision.png)
+
+**The Capacity Assessment.** The artifact that leaves the system —
+serif, on paper, unlike anything else on screen: what was degraded to
+protect what, and what it would take to stop choosing.
+
+![Capacity Assessment](docs/screenshots/s6-capacity.png)

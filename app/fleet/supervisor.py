@@ -29,8 +29,10 @@ from typing import Any
 from app.fleet.authority import POLICY
 from app.fleet.events import BUS, EventKind, Outcome
 
-# A worker may be wrong by measurement noise; it may not be wrong by 16 mg/L.
-RELATIVE_TOLERANCE = 0.15
+# A worker may be wrong by measurement noise plus staleness — a reading
+# taken thirty seconds ago is legitimately different mid-surge. It may
+# not be wrong by half: an hours-old 1.4 against a live 3.4 quarantines.
+RELATIVE_TOLERANCE = 0.35
 
 STEP_BUDGET = 24  # tool/model steps per issued task
 WALL_CLOCK_CEILING_S = 120.0  # per issued task

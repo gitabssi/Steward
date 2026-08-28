@@ -10,10 +10,14 @@ function uptime(seconds: number): string {
 export function TopBar({
   state,
   live,
+  voice,
+  onToggleVoice,
   onOpenControlCentre,
 }: {
   state: ShiftState | null;
   live: boolean;
+  voice: boolean;
+  onToggleVoice: () => void;
   onOpenControlCentre: () => void;
 }) {
   const facility = state?.facility;
@@ -43,6 +47,21 @@ export function TopBar({
             {live ? "● LIVE" : "○ DEGRADED — last known state shown"}
           </span>
         </div>
+        <button
+          onClick={onToggleVoice}
+          title="Chirp 3 HD — system voice, in product"
+          style={{
+            fontFamily: "var(--mono)",
+            fontSize: 11,
+            background: voice ? "var(--ink)" : "none",
+            color: voice ? "var(--ground)" : "var(--ink)",
+            border: "1px solid var(--rule)",
+            padding: "6px 12px",
+            cursor: "pointer",
+          }}
+        >
+          VOICE {voice ? "ON" : "OFF"}
+        </button>
         <button
           onClick={onOpenControlCentre}
           style={{
