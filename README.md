@@ -237,9 +237,22 @@ it. So on the deployed service `/summarize` **fails closed**: it
 returns `raw telemetry withheld at the boundary` rather than passing
 anything through unsummarised. That is the correct failure mode for a
 sovereignty boundary and it is the one we shipped — the boundary holds
-whether or not the model answers. With an accelerator (or locally, via
-`docker build edge/ && docker run`), the same code path returns the
-structured summary.
+whether or not the model answers.
+
+Run the appliance where it actually belongs and the same code path
+returns the structured summary:
+
+```bash
+docker build -t steward-edge:local edge/     # bakes the weights in
+docker run --rm -p 8090:8090 steward-edge:local
+curl -s -X POST localhost:8090/warm
+curl -s -X POST localhost:8090/summarize -H 'Content-Type: application/json' \
+  -d '{"station":"aeration","readings":{"aeration_do_mg_l":0.9,"influent_flow_mgd":3.4}}'
+```
+
+That this is more faithful than the cloud deployment is the point: the
+appliance is supposed to sit inside the plant's network, not in a
+region.
 
 ### One more thing we are being precise about: which screener ran
 
