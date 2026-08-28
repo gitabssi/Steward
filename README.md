@@ -60,8 +60,11 @@ this hackathon.*
 # (fleet + console on :8000, state primacy agency publisher on :8091)
 make install && make dev
 
-# the tests a review tool should run first — 22 policy tests, no cloud needed
+# the tests a review tool should run first — 25 policy tests, no cloud needed
 make test
+
+# replay a whole shift from the top (SPEED=fast|demo|real)
+make replay SPEED=fast
 
 # deploy: fleet → Vertex AI Agent Runtime (long-lived, agent identity)
 make deploy

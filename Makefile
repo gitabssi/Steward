@@ -15,7 +15,7 @@
 PROJECT ?= $(shell gcloud config get-value project 2>/dev/null)
 REGION ?= us-central1
 
-.PHONY: install dev dev-console console test test-all data backtest deploy deploy-run deploy-all lint
+.PHONY: install dev dev-console console replay test test-all data backtest deploy deploy-run deploy-all lint
 
 install:
 	uv sync --all-groups --extra lint
@@ -38,6 +38,10 @@ dev: console
 
 console:
 	cd console && npm install --no-fund --no-audit --silent && npm run build
+
+# Replay a shift from the top. `make replay SPEED=fast|demo|real`.
+replay: console
+	scripts/replay.sh $(SPEED)
 
 # Hot-reloading console against a running `make dev` (Vite on :5173).
 dev-console:
