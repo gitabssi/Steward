@@ -130,6 +130,18 @@ class Supervisor:
 
     # -- budget enforcement -------------------------------------------------
 
+    def stop_unresponsive(self, envelope: TaskEnvelope) -> None:
+        """A worker that stopped answering is stopped the same way one
+        that loops is: quarantined and re-issued, never left hanging."""
+        self._quarantine_name(
+            envelope.agent_name,
+            reason=(
+                f"no response within the {WALL_CLOCK_CEILING_S:.0f}s wall-clock "
+                "ceiling — stopped, not left hanging"
+            ),
+        )
+        self._reissue(envelope.agent_name, envelope.task)
+
     def enforce_budget(self, envelope: TaskEnvelope) -> bool:
         """Call on every step. False → the worker was stopped and re-issued."""
         if envelope.spend_step():

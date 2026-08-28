@@ -1,3 +1,45 @@
+# Steward — orientation for coding agents
+
+**What this is.** A fleet of long-lived agents that works beside a
+part-time municipal wastewater operator: it forecasts permit exceedances
+against the real EPA NPDES record, argues with itself in the open when
+no fix is free, and hands every irreversible decision back to the human
+whose certification is on the line. Read [README.md](README.md) first —
+it carries the finding, the folder map, and the design rules.
+
+**The five rules this codebase will not bend.** Break any of them and
+the project stops being what it is:
+
+1. **No agent takes an irreversible action.** Authority is enforced per
+   tool call (`app/fleet/authority.py`); irreversible tools need a
+   single-use token minted only by the operator's confirmed decision.
+2. **Every number an agent asserts cites a source.** The supervisor
+   (`app/fleet/supervisor.py`) reads cited sensors itself; no source or
+   a contradiction means quarantine, and the claim never reaches the
+   operator.
+3. **Seeds contain world facts, never agent behaviour.**
+   `fixtures/seeds/*.json` may describe a poisoned lab report arriving;
+   it may never say "quarantine the worker". A test enforces this.
+4. **Gemma at the edge is self-hosted, never a Vertex API call.** The
+   whole point of `edge/` is that raw plant data does not cross the OT
+   boundary; an API call would defeat it.
+5. **Aggregate reporting only, and no facility is ever named.** See
+   "Why the facility is de-identified" in the README. The demo facility
+   is a composite; the backtest is national and anonymous.
+
+**Voice.** Product copy is plain, specific, unsentimental: state
+consequences, never editorialize, never thank the user. Say *the plant*,
+*the watershed*, *the discharge*.
+
+**Numbers in the README, the video, and the Devpost text come from
+`data/sql/03_finding.sql`.** Never hand-type one; re-run `make backtest`
+and quote the `finding` table.
+
+**Local loop:** `make dev` (console at http://localhost:8000/console/),
+`make test` (22 policy tests, no cloud), `make lint`.
+
+---
+
 # Coding Agent Guide
 
 ## Prerequisites

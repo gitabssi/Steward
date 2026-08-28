@@ -111,6 +111,39 @@ class TestSupervisor:
         supervisor = Supervisor(read_source=self.sensors)
         assert supervisor.audit(Claim("worker_c", "ammonia", 33.1, source="sensor:ammonia"))
 
+    def test_unverifiable_citation_passes_but_is_recorded(self) -> None:
+        from app.fleet.authority import POLICY
+
+        POLICY.grant(AgentGrant("worker_d", "worker-d@test", "FAC-1", Authority.OBSERVE))
+        supervisor = Supervisor(read_source=self.sensors)
+        # A forecast figure the supervisor cannot read is not a lie.
+        assert supervisor.audit(Claim("worker_d", "rain_mm", 38.0, source="forecast:rain"))
+        assert not POLICY.grants["worker_d"].quarantined
+
+    def test_unresponsive_worker_is_stopped_not_left_hanging(self) -> None:
+        from app.fleet.authority import POLICY
+        from app.fleet.supervisor import TaskEnvelope
+
+        POLICY.grant(AgentGrant("worker_e", "worker-e@test", "FAC-1", Authority.OBSERVE))
+        supervisor = Supervisor(read_source=self.sensors)
+        reissued: list[tuple[str, str]] = []
+        supervisor.reissue_hooks.append(lambda name, task: reissued.append((name, task)))
+        supervisor.stop_unresponsive(TaskEnvelope(agent_name="worker_e", task="assess"))
+        assert POLICY.grants["worker_e"].quarantined
+        assert reissued == [("worker_e", "assess")]
+
+    def test_step_budget_stops_a_looping_worker(self) -> None:
+        from app.fleet.authority import POLICY
+        from app.fleet.supervisor import STEP_BUDGET, TaskEnvelope
+
+        POLICY.grant(AgentGrant("worker_f", "worker-f@test", "FAC-1", Authority.OBSERVE))
+        supervisor = Supervisor(read_source=self.sensors)
+        envelope = TaskEnvelope(agent_name="worker_f", task="loop")
+        for _ in range(STEP_BUDGET):
+            assert supervisor.enforce_budget(envelope)
+        assert not supervisor.enforce_budget(envelope)  # the step past the budget
+        assert POLICY.grants["worker_f"].quarantined
+
 
 class TestGuards:
     def test_embedded_instruction_is_stripped_and_numbers_kept(self) -> None:

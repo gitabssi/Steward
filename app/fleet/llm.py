@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -28,7 +29,12 @@ from google.genai import types
 
 from app.fleet.authority import AuthorityPlugin
 from app.fleet.events import BUS, EventKind, Outcome
-from app.fleet.supervisor import Claim, Supervisor, TaskEnvelope
+from app.fleet.supervisor import (
+    WALL_CLOCK_CEILING_S,
+    Claim,
+    Supervisor,
+    TaskEnvelope,
+)
 
 
 @dataclass
@@ -70,14 +76,14 @@ class ReasoningPool:
         envelope = TaskEnvelope(agent_name=agent.name, task=prompt[:80])
         try:
             try:
-                raw_text = await self._invoke(agent, prompt, envelope)
+                raw_text = await self._budgeted(agent, prompt, envelope)
             except Exception as exc:
                 if "429" not in str(exc) and "RESOURCE_EXHAUSTED" not in str(exc):
                     raise
                 # Shared-quota throttling deserves one paced retry before
                 # the deterministic fallback takes over.
                 await asyncio.sleep(12)
-                raw_text = await self._invoke(agent, prompt, envelope)
+                raw_text = await self._budgeted(agent, prompt, envelope)
             parsed = _parse_contract(raw_text)
         except Exception as exc:
             BUS.record(
@@ -118,6 +124,25 @@ class ReasoningPool:
             audited=audited,
             raw=parsed,
         )
+
+    async def _budgeted(self, agent: Agent, prompt: str, envelope: TaskEnvelope) -> str:
+        """The wall-clock ceiling, actually enforced.
+
+        The step budget is charged per event the runner yields — which
+        cannot help if the call hangs *before* yielding anything. So the
+        whole invocation sits inside a hard timeout: a worker that stops
+        responding is stopped, quarantined, and re-issued, exactly like
+        one that loops. Without this the ceiling in docs/operations.md
+        would be a claim rather than a mechanism.
+        """
+        remaining = WALL_CLOCK_CEILING_S - (time.time() - envelope.started_at)
+        try:
+            return await asyncio.wait_for(
+                self._invoke(agent, prompt, envelope), timeout=max(5.0, remaining)
+            )
+        except TimeoutError as exc:
+            self.supervisor.stop_unresponsive(envelope)
+            raise RuntimeError("wall-clock ceiling exceeded — worker stopped") from exc
 
     async def _invoke(self, agent: Agent, prompt: str, envelope: TaskEnvelope) -> str:
         runner = self._runner(agent)

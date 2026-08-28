@@ -15,18 +15,32 @@
 PROJECT ?= $(shell gcloud config get-value project 2>/dev/null)
 REGION ?= us-central1
 
-.PHONY: install dev test data backtest deploy deploy-run deploy-all lint
+.PHONY: install dev dev-console console test data backtest deploy deploy-run deploy-all lint
 
 install:
 	uv sync --all-groups
 	cd console && npm install --no-fund --no-audit
 
-dev:
+# One command, one URL: the fleet serves the built console at
+# http://localhost:8000/console/ alongside /api, /a2a and ADK's dev UI.
+# The state primacy agency runs as its own service on :8091, so the
+# cross-department registry resolve is a real network call.
+dev: console
 	@trap 'kill 0' EXIT; \
 	uv run --no-project --with fastapi,uvicorn uvicorn server:app \
 	  --app-dir primacy --port 8091 & \
+	sleep 2; \
+	echo "→ console  http://localhost:8000/console/"; \
+	echo "→ ledger   http://localhost:8000/api/events"; \
 	PRIMACY_AGENCY_ENDPOINT=http://localhost:8091 \
-	  uv run uvicorn app.fast_api_app:app --port 8000 & \
+	  STEWARD_FAULT_INJECTION=stale_lab_context \
+	  uv run uvicorn app.fast_api_app:app --port 8000
+
+console:
+	cd console && npm install --no-fund --no-audit --silent && npm run build
+
+# Hot-reloading console against a running `make dev` (Vite on :5173).
+dev-console:
 	cd console && npm run dev
 
 test:

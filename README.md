@@ -56,7 +56,8 @@ this hackathon.*
 ## Run it
 
 ```bash
-# local, one command (fleet API :8000, primacy publisher :8091, console :5173)
+# local, one command → console at http://localhost:8000/console/
+# (fleet + console on :8000, state primacy agency publisher on :8091)
 make install && make dev
 
 # the tests a review tool should run first — 22 policy tests, no cloud needed
@@ -77,6 +78,29 @@ make data && make backtest
 Auth is Application Default Credentials / Workload Identity throughout.
 **No keys, tokens, or credentials exist anywhere in this repo or its
 history**; [.env.example](.env.example) documents every variable.
+
+**Verify the deployed fleet yourself** — this is a live Agent Runtime
+engine holding its own workload identity (not a shared service account):
+
+```bash
+TOKEN=$(gcloud auth print-access-token)
+BASE=https://us-central1-aiplatform.googleapis.com/v1/projects/steward-fleet-2026/locations/us-central1/reasoningEngines/6520690542165098496
+
+# the engine's own identity + exported methods
+curl -s -H "Authorization: Bearer $TOKEN" $BASE | jq '.spec.identityType, .spec.effectiveIdentity'
+
+# open a session on the live fleet
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  $BASE:query -d '{"class_method":"create_session","input":{"user_id":"judge"}}'
+```
+
+Or, with no credentials at all, read the running fleet's own audit
+ledger and its BigQuery-computed finding:
+
+```bash
+curl -s https://steward-fleet-649854119911.us-central1.run.app/api/finding
+curl -sN https://steward-fleet-649854119911.us-central1.run.app/api/events | head -20
+```
 
 ---
 

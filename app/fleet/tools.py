@@ -93,19 +93,27 @@ def read_public_record(permit_id: str, agent_name: str = "") -> dict:
     project = os.environ["GOOGLE_CLOUD_PROJECT"]
     dataset = os.environ.get("BQ_DATASET", "steward_npdes")
     client = bigquery.Client(project=project)
+    # Group by unit as well as parameter and statistical base: the same
+    # parameter carries both a concentration limit (mg/L) and a mass
+    # loading limit (lb/day), and averaging across them yields nonsense
+    # like "1,989 mg/L of ammonia". Concentration limits first — they are
+    # what an operator watches minute to minute.
     rows = client.query(
         f"""
-        SELECT parameter_code, ANY_VALUE(parameter_desc) AS parameter_desc,
+        SELECT parameter_code,
+               ANY_VALUE(parameter_desc) AS parameter_desc,
                statistical_base_code,
-               ANY_VALUE(standard_unit_desc) AS unit,
+               standard_unit_desc AS unit,
                APPROX_QUANTILES(limit_value_standard_units, 2)[OFFSET(1)] AS limit_value,
                COUNT(*) AS reported_values
         FROM `{project}.{dataset}.dmrs`
         WHERE external_permit_nmbr = @permit
           AND limit_type_code = 'ENF'
+          AND limit_value_qualifier_code IN ('<=', '<')
           AND limit_value_standard_units IS NOT NULL
-        GROUP BY parameter_code, statistical_base_code
-        ORDER BY reported_values DESC
+          AND monitoring_location_code = '1'   -- effluent gross
+        GROUP BY parameter_code, statistical_base_code, standard_unit_desc
+        ORDER BY (standard_unit_desc = 'mg/L') DESC, reported_values DESC
         LIMIT 24
         """,
         job_config=bigquery.QueryJobConfig(

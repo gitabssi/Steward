@@ -24,4 +24,7 @@ COPY server.py /srv/server.py
 ENV OLLAMA_HOST=http://localhost:11434
 EXPOSE 8090
 
-CMD ["sh", "-c", "ollama serve & sleep 3 && uvicorn server:app --app-dir /srv --host 0.0.0.0 --port ${PORT:-8090}"]
+# The base image sets ENTRYPOINT ["/bin/ollama"], which would swallow the
+# command below — reset it so the edge appliance boots both processes.
+ENTRYPOINT []
+CMD ["/bin/sh", "-c", "ollama serve & sleep 3 && uvicorn server:app --app-dir /srv --host 0.0.0.0 --port ${PORT:-8090}"]

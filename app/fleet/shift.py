@@ -96,6 +96,7 @@ class ShiftLoop:
         self.bypass_specialist = None
         self._contention_opened = False
         self._task: asyncio.Task | None = None
+        self._jobs: set[asyncio.Task] = set()  # in-flight reasoning, kept referenced
 
     # ------------------------------------------------------------------ run
 
@@ -126,6 +127,12 @@ class ShiftLoop:
             await asyncio.sleep(TICK_SECONDS)
 
     async def tick(self) -> None:
+        """One heartbeat: publish the plant, then dispatch what it means.
+
+        Reasoning is dispatched, never awaited here. A worker thinking for
+        thirty seconds must not stop the operator's screen from updating —
+        the plant does not pause while the fleet deliberates.
+        """
         telemetry = self.world.telemetry()
         self.state.telemetry = telemetry
         self.state.dilution_pct = self.world.dilution_pct_at_intake()
@@ -139,8 +146,29 @@ class ShiftLoop:
             minutes=round(self.world.minutes, 1),
         )
         for event in self.world.due_events():
-            await self.handle(event)
+            self._dispatch(self.handle(event), f"event:{event['kind']}")
         await self.watch_conditions(telemetry)
+
+    def _dispatch(self, coro, label: str) -> None:
+        """Run a reasoning job beside the heartbeat, and never lose its
+        failure: a crashed job becomes a contained SYSTEM row, not an
+        unretrieved-task warning nobody reads."""
+
+        async def guarded() -> None:
+            try:
+                await coro
+            except Exception as exc:
+                BUS.record(
+                    EventKind.SYSTEM,
+                    "fleet-orchestrator",
+                    f"{label} failed and was contained",
+                    Outcome.INFO,
+                    error=str(exc)[:300],
+                )
+
+        task = asyncio.create_task(guarded())
+        self._jobs.add(task)
+        task.add_done_callback(self._jobs.discard)
 
     # ------------------------------------------------------- world events
 
@@ -230,7 +258,7 @@ class ShiftLoop:
         do = telemetry.get("aeration_do_mg_l", 9)
         if do < 1.5 and not self._contention_opened:
             self._contention_opened = True
-            await self.run_contention(telemetry)
+            self._dispatch(self.run_contention(telemetry), "contention")
         ammonia = telemetry.get("effluent_ammonia_mg_l", 0)
         limit = next(
             (row for row in self.state.permit_limits if row["parameter"] == "ammonia"),
