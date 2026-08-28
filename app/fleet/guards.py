@@ -61,7 +61,10 @@ def _screen_with_model_armor(text: str) -> ScreenResult | None:
     try:
         from google.cloud import modelarmor_v1
 
-        location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1")
+        # Model Armor is regional and has its own endpoint per region.
+        # GOOGLE_CLOUD_LOCATION is 'global' here because that is where
+        # Gemini 3.x serves from, so the screener carries its own.
+        location = os.environ.get("MODEL_ARMOR_LOCATION", "us-central1")
         client = modelarmor_v1.ModelArmorClient(
             client_options={"api_endpoint": f"modelarmor.{location}.rep.googleapis.com"}
         )
