@@ -44,10 +44,17 @@ app = FastAPI(
 )
 
 # The de-identification pass: whatever the model does, these never leave.
+# Order matters — the specific patterns run before the general one, or
+# "341 Cedar Road" loses its street to the person-name rule.
 _IDENTIFYING = [
-    (re.compile(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b"), "[name]"),  # person names
     (re.compile(r"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b"), "[phone]"),
-    (re.compile(r"\b\d{1,5} [A-Z][a-z]+ (Road|Rd|Street|St|Lane|Ln|Route|Hwy)\b"), "[address]"),
+    (
+        re.compile(
+            r"\b\d{1,5} [A-Z][a-z]+ (?:Road|Rd|Street|St|Avenue|Ave|Lane|Ln|Route|Hwy|Drive|Dr)\b"
+        ),
+        "[address]",
+    ),
+    (re.compile(r"\b[A-Z][a-z]+ [A-Z][a-z]+\b"), "[name]"),  # person names, last
 ]
 
 
@@ -57,15 +64,43 @@ def deidentify(text: str) -> str:
     return text
 
 
-def ollama_generate(prompt: str) -> str:
+# The appliance this service stands in for would carry an accelerator.
+# On Cloud Run's CPU the first token costs minutes, so the model is kept
+# resident between calls and the output is capped: a condition summary
+# is three short fields, not an essay.
+GENERATE_TIMEOUT_S = int(os.environ.get("EDGE_TIMEOUT_S", "480"))
+
+
+def ollama_generate(prompt: str, num_predict: int = 160) -> str:
     body = json.dumps(
-        {"model": MODEL, "prompt": prompt, "stream": False, "options": {"temperature": 0.1}}
+        {
+            "model": MODEL,
+            "prompt": prompt,
+            "stream": False,
+            "keep_alive": "30m",
+            "options": {
+                "temperature": 0.1,
+                "num_predict": num_predict,
+                "num_ctx": 2048,
+            },
+        }
     ).encode()
     request = urllib.request.Request(
         f"{OLLAMA}/api/generate", data=body, headers={"Content-Type": "application/json"}
     )
-    with urllib.request.urlopen(request, timeout=120) as response:
+    with urllib.request.urlopen(request, timeout=GENERATE_TIMEOUT_S) as response:
         return json.load(response)["response"]
+
+
+@app.post("/warm")
+def warm() -> dict:
+    """Load the weights and hold them resident — called once before a
+    demo so the first real request isn't paying for a cold model."""
+    try:
+        ollama_generate("Reply with the single word: ready", num_predict=8)
+        return {"model": MODEL, "state": "resident"}
+    except Exception as exc:
+        return {"model": MODEL, "state": "cold", "error": str(exc)[:200]}
 
 
 class Telemetry(BaseModel):
@@ -129,7 +164,7 @@ def transcribe(note: RoundNote) -> dict:
                 data=body,
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(request, timeout=180) as response:
+            with urllib.request.urlopen(request, timeout=GENERATE_TIMEOUT_S) as response:
                 text = json.load(response)["response"]
             return {"model": MODEL, "path": "edge-audio", "text": deidentify(text)}
         except Exception as exc:
@@ -142,6 +177,8 @@ def transcribe(note: RoundNote) -> dict:
     return {"model": MODEL, "path": "edge-text", "text": deidentify(note.text or "")}
 
 
+@app.get("/health")
 @app.get("/healthz")
-def healthz() -> dict:
+def health() -> dict:
+    # Both paths: some fronting infrastructure reserves /healthz.
     return {"service": "steward-edge", "model": MODEL, "boundary": "OT — nothing raw crosses"}

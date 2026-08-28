@@ -6,6 +6,13 @@ import type { PendingDecision } from "./types";
  *  the operator, and irreversible actions run only after readback and
  *  confirmation — the approval token is minted on Confirm, nowhere else. */
 
+/** Windows arrive in minutes; an operator reads "40 min", not "0.67h". */
+function formatWindow(minutes: number): string {
+  if (minutes < 90) return `${Math.round(minutes)} min`;
+  const hours = minutes / 60;
+  return `${hours % 1 === 0 ? hours : hours.toFixed(1)} h`;
+}
+
 export function Queue({ pending }: { pending: PendingDecision[] }) {
   const open = pending.filter((decision) => !decision.resolved).slice(0, 2);
   const [confirming, setConfirming] = useState<{ id: string; action: string } | null>(null);
@@ -26,7 +33,7 @@ export function Queue({ pending }: { pending: PendingDecision[] }) {
           <div style={{ display: "flex", justifyContent: "space-between" }}>
             <span className="subject">{request.subject}</span>
             <span className="mono" style={{ fontSize: 11, color: "var(--amber)" }}>
-              {request.window_minutes}h window
+              {formatWindow(request.window_minutes)} window
             </span>
           </div>
           {confirming?.id === request.decision_id ? (

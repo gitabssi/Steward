@@ -212,6 +212,20 @@ and reported. The story is about capacity, not safety.
    usually earlier) to the date the report actually reached the
    regulator (`VALUE_RECEIVED_DATE`).
 
+### One more thing we are being precise about: which screener ran
+
+[app/fleet/guards.py](app/fleet/guards.py) calls **Model Armor**
+(`sanitize_user_prompt`) whenever `MODEL_ARMOR_TEMPLATE` is configured,
+and falls back to a local screen with the same contract when it is not.
+Provisioning a Model Armor template needs project-level access this
+build did not have, so **the deployed demo runs the local screener** —
+and every GUARD row in the ledger names the path that ran
+(`screener: model-armor` or `screener: local-fallback`). Set
+`MODEL_ARMOR_TEMPLATE` and the managed path takes over with no code
+change. We would rather show you the seam than let a ledger row imply
+a service we did not call. A silent fallback is indistinguishable from
+a lie, which is why nothing here is silent.
+
 **Limitations, stated plainly.** Recall 53.9%: trend-driven exceedances
 are the catchable half; sudden upsets are not in last month's curve —
 which is why the fleet also watches live telemetry. Precision 25.2%: a
@@ -315,7 +329,7 @@ registry does real work.
 | **Agent Registry + A2A** | Platform registry via Agent Runtime; live cross-department resolve of the primacy agency's card |
 | **BigQuery** | The national NPDES corpus (66M reported values), the backtest, ADK's BigQuery agent-analytics plugin |
 | **Memory Bank** | Learned-facts backend on Agent Runtime ([app/fleet/memory.py](app/fleet/memory.py)); local store otherwise, recorded either way |
-| **Model Armor** | Inbound document screen ([app/fleet/guards.py](app/fleet/guards.py)); local fallback recorded when unconfigured |
+| **Model Armor** | Inbound document screen ([app/fleet/guards.py](app/fleet/guards.py)) — `sanitizeUserPrompt` against a jailbreak/prompt-injection template. See the honesty note below on which path the deployed demo actually runs |
 | **Cloud Trace / Logging** | Every ledger row carries the active trace id; the video holds console and Cloud Trace side by side |
 | **Firestore** | Live per-facility state and the persisted ledger |
 | **Cloud Run** | Fleet+console, the primacy publisher, and the Gemma edge — three services, three identities |

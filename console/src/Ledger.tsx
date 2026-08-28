@@ -36,8 +36,25 @@ function verbFor(entry: LedgerEntry): string {
   }
 }
 
+/** Consecutive identical acts by the same agent collapse into one row
+ *  with a count. A worker citing six forecast figures produced six
+ *  honest rows; the ledger keeps the fact and drops the repetition, so
+ *  the reader still sees the denials that matter. */
+function collapse(entries: LedgerEntry[]): (LedgerEntry & { repeats: number })[] {
+  const out: (LedgerEntry & { repeats: number })[] = [];
+  for (const entry of entries) {
+    const last = out[out.length - 1];
+    if (last && last.actor === entry.actor && last.action === entry.action) {
+      last.repeats += 1;
+      continue;
+    }
+    out.push({ ...entry, repeats: 1 });
+  }
+  return out;
+}
+
 export function Ledger({ entries }: { entries: LedgerEntry[] }) {
-  const rows = entries.filter((entry) => !HIDDEN.has(entry.kind)).slice(-26);
+  const rows = collapse(entries.filter((entry) => !HIDDEN.has(entry.kind))).slice(-26);
   return (
     <div className="ledger">
       <div style={{ padding: "12px 14px 6px", borderBottom: "1px solid var(--rule)" }}>
@@ -53,7 +70,15 @@ export function Ledger({ entries }: { entries: LedgerEntry[] }) {
               <span className="who">{entry.actor}</span>
               <span className="verdict">{verbFor(entry)}</span>
             </div>
-            <div>{entry.action}</div>
+            <div>
+              {entry.action}
+              {entry.repeats > 1 && (
+                <span className="mono" style={{ color: "var(--ink-soft)", fontSize: 11 }}>
+                  {" "}
+                  ×{entry.repeats}
+                </span>
+              )}
+            </div>
             {typeof entry.detail?.reason === "string" && (
               <div style={{ color: "var(--ink-soft)", fontSize: 11 }}>{entry.detail.reason}</div>
             )}
