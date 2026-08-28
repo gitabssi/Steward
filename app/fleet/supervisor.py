@@ -88,12 +88,20 @@ class Supervisor:
 
         authoritative = self.read_source(claim.source)
         if authoritative is None:
-            self._quarantine(
-                claim,
-                reason=f"cited a source that does not exist: {claim.source}",
-                comparison=None,
+            # A citation the supervisor cannot independently resolve (a lab
+            # report line, a forecast) is not a lie — it is an unverified
+            # citation. It passes, and the ledger says exactly that. Only
+            # the two compromising cases quarantine: no source at all, or a
+            # contradiction with a source the supervisor CAN read.
+            BUS.record(
+                EventKind.AGENT_STATE,
+                self._identity(claim.agent_name),
+                f"claim cites {claim.source} — not independently verifiable, recorded as such",
+                Outcome.INFO,
+                parameter=claim.parameter,
+                value=claim.value,
             )
-            return False
+            return True
 
         deviation = abs(claim.value - authoritative) / max(abs(authoritative), 1e-9)
         if deviation > RELATIVE_TOLERANCE:

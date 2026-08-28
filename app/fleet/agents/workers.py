@@ -32,15 +32,24 @@ MODEL = "gemini-3.7-flash"
 FACILITY = "REP-0042051"
 
 _CONTRACT = """
+Your facility: NPDES permit REP-0042051 ("Cedar Ridge"). Pass exactly
+this id as the `facility` argument of every scoped tool; your grant is
+scoped to it and any other id will be denied and recorded.
+
 Answer with strict JSON only, no prose around it:
 {"claims": [{"parameter": str, "value": number, "source": str}],
  "proposal": {"action": str, "rationale": str,
               "consequences": [str], "urgency_minutes": int} | null,
  "say": str}
 Rules that are not yours to bend:
-- Every number you assert appears in "claims" with its source citation
-  (e.g. "sensor:aeration_do_mg_l", "seed:permit_limits"). An unsourced
-  number will be quarantined by the supervisor, and should be.
+- Every number you assert appears in "claims" with its source citation.
+  Valid citations: "sensor:<telemetry key exactly as given to you>"
+  (e.g. "sensor:aeration_do_mg_l") for live values;
+  "seed:facility.design_flow_mgd" for the design rating;
+  "doc:<report no.>" for a lab report line; "forecast:<event>" for a
+  forecast figure. The supervisor reads sensor citations itself: an
+  unsourced number, or one contradicting its cited sensor, never
+  reaches the operator and quarantines you — as it should.
 - "say" is one or two short sentences to the operator, plain and
   unsentimental. State consequences; never editorialize; never thank.
 - If you propose nothing, "proposal" is null.

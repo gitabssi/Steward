@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#5a615e"/>
+    </marker>
+  </defs>
+  <rect width="1200" height="640" fill="#f7f5f0"/>
+  <text x="40" y="46" font-size="24" font-weight="bold" fill="#1c211f">STEWARD — architecture</text>
+  <text x="40" y="68" font-size="13" fill="#5a615e">One fleet per facility. Raw plant data never crosses the OT boundary. Every irreversible action requires the operator.</text>
+
+  <!-- THE PLANT (OT segment) -->
+  <rect x="40" y="100" width="300" height="330" fill="#ffffff" stroke="#7a6549" stroke-width="1.5"/>
+  <text x="56" y="126" font-size="15" font-weight="bold" fill="#7a6549">THE PLANT · OT SEGMENT</text>
+  <rect x="60" y="145" width="260" height="70" fill="#f7f5f0" stroke="#ddd8cc"/>
+  <text x="74" y="170" font-size="13" fill="#1c211f">SCADA telemetry · lab reports</text>
+  <text x="74" y="188" font-size="13" fill="#1c211f">operator's dictated round notes</text>
+  <rect x="60" y="235" width="260" height="90" fill="#fdfcf9" stroke="#1f6f6b" stroke-width="1.5"/>
+  <text x="74" y="260" font-size="14" font-weight="bold" fill="#1f6f6b">edge/ — Gemma 4 E4B</text>
+  <text x="74" y="279" font-size="12" fill="#1c211f">self-hosted (Ollama), Cloud Run</text>
+  <text x="74" y="296" font-size="12" fill="#1c211f">raw in → de-identified summary out</text>
+  <text x="74" y="313" font-size="12" fill="#5a615e">never a Vertex API — that's the point</text>
+  <line x1="190" y1="215" x2="190" y2="235" stroke="#5a615e" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="60" y="410" font-size="12" fill="#5a615e">fixtures/ replays real EPA permit structure;</text>
+  <text x="60" y="426" font-size="12" fill="#5a615e">telemetry between real values is interpolated</text>
+
+  <!-- OT boundary -->
+  <line x1="370" y1="90" x2="370" y2="450" stroke="#b03a30" stroke-width="3" stroke-dasharray="10 6"/>
+  <text x="370" y="475" font-size="13" font-weight="bold" fill="#b03a30" text-anchor="middle">OT BOUNDARY — nothing raw crosses</text>
+
+  <!-- FLEET (Agent Runtime) -->
+  <rect x="410" y="100" width="380" height="330" fill="#ffffff" stroke="#1f6f6b" stroke-width="2"/>
+  <text x="426" y="126" font-size="15" font-weight="bold" fill="#1f6f6b">FLEET · VERTEX AI AGENT RUNTIME (long-lived)</text>
+  <rect x="430" y="140" width="160" height="52" fill="#fdfcf9" stroke="#ddd8cc"/>
+  <text x="440" y="161" font-size="12.5" font-weight="bold" fill="#1c211f">orchestrator (ADK)</text>
+  <text x="440" y="178" font-size="11.5" fill="#5a615e">shift loop · A2A served</text>
+  <rect x="610" y="140" width="160" height="52" fill="#fdfcf9" stroke="#b03a30"/>
+  <text x="620" y="161" font-size="12.5" font-weight="bold" fill="#b03a30">supervisor</text>
+  <text x="620" y="178" font-size="11.5" fill="#5a615e">claim audit → quarantine</text>
+  <rect x="430" y="208" width="160" height="76" fill="#fdfcf9" stroke="#ddd8cc"/>
+  <text x="440" y="228" font-size="12.5" font-weight="bold" fill="#1c211f">5 station agents</text>
+  <text x="440" y="245" font-size="11.5" fill="#5a615e">flow · aeration · permit</text>
+  <text x="440" y="261" font-size="11.5" fill="#5a615e">weather · notifications</text>
+  <text x="440" y="277" font-size="11.5" fill="#1f6f6b">observe / recommend / act</text>
+  <rect x="610" y="208" width="160" height="76" fill="#fdfcf9" stroke="#ddd8cc"/>
+  <text x="620" y="228" font-size="12.5" font-weight="bold" fill="#1c211f">contention arbiter</text>
+  <text x="620" y="245" font-size="11.5" fill="#5a615e">agents that disagree,</text>
+  <text x="620" y="261" font-size="11.5" fill="#5a615e">costed options,</text>
+  <text x="620" y="277" font-size="11.5" fill="#5a615e">escalation to the human</text>
+  <rect x="430" y="300" width="160" height="56" fill="#fdfcf9" stroke="#ddd8cc"/>
+  <text x="440" y="320" font-size="12.5" font-weight="bold" fill="#1c211f">Model Armor gate</text>
+  <text x="440" y="337" font-size="11.5" fill="#5a615e">inbound docs screened</text>
+  <rect x="610" y="300" width="160" height="56" fill="#fdfcf9" stroke="#ddd8cc"/>
+  <text x="620" y="320" font-size="12.5" font-weight="bold" fill="#1c211f">authority + identity</text>
+  <text x="620" y="337" font-size="11.5" fill="#5a615e">per-tool-call, per-facility</text>
+  <text x="430" y="382" font-size="12" fill="#5a615e">Gemini 3.7 Flash reasoning · Memory Bank learned facts</text>
+  <text x="430" y="400" font-size="12" fill="#5a615e">Cloud Trace ids on every audit-ledger row · Firestore state</text>
+  <line x1="340" y1="270" x2="410" y2="270" stroke="#5a615e" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="375" y="260" font-size="10.5" fill="#5a615e" text-anchor="middle">summaries</text>
+
+  <!-- REGISTRY / cross-department -->
+  <rect x="410" y="490" width="380" height="110" fill="#ffffff" stroke="#c07d16" stroke-width="1.5"/>
+  <text x="426" y="516" font-size="14" font-weight="bold" fill="#c07d16">AGENT REGISTRY · two publishers (cross-department)</text>
+  <text x="426" y="538" font-size="12.5" fill="#1c211f">steward fleet (5 cards, cached at boot)</text>
+  <text x="426" y="558" font-size="12.5" fill="#1c211f">state primacy agency — primacy/ (own Cloud Run service):</text>
+  <text x="426" y="576" font-size="12.5" fill="#1c211f">wet-weather bypass specialist, resolved live on a miss, mounted A2A</text>
+  <line x1="600" y1="490" x2="600" y2="430" stroke="#c07d16" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- DATA -->
+  <rect x="830" y="100" width="330" height="200" fill="#ffffff" stroke="#4e8f3f" stroke-width="1.5"/>
+  <text x="846" y="126" font-size="15" font-weight="bold" fill="#4e8f3f">BIGQUERY · the real record</text>
+  <text x="846" y="150" font-size="12.5" fill="#1c211f">EPA ICIS-NPDES: 39M reported values,</text>
+  <text x="846" y="168" font-size="12.5" fill="#1c211f">75K facilities, FY2020–FY2025</text>
+  <text x="846" y="192" font-size="12.5" fill="#1c211f">TimesFM via AI.FORECAST (serverless):</text>
+  <text x="846" y="210" font-size="12.5" fill="#1c211f">P90 exceedance flags, backtested —</text>
+  <text x="846" y="228" font-size="12.5" font-weight="bold" fill="#1c211f">53.9% of 18,338 real exceedances,</text>
+  <text x="846" y="246" font-size="12.5" font-weight="bold" fill="#1c211f">median 51 days early</text>
+  <text x="846" y="272" font-size="11.5" fill="#5a615e">+ ADK agent analytics dataset</text>
+  <line x1="790" y1="200" x2="830" y2="200" stroke="#5a615e" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="830" y1="220" x2="790" y2="220" stroke="#5a615e" stroke-width="1.5" marker-end="url(#arr)"/>
+
+  <!-- CONSOLE -->
+  <rect x="830" y="340" width="330" height="180" fill="#ffffff" stroke="#1c211f" stroke-width="1.5"/>
+  <text x="846" y="366" font-size="15" font-weight="bold" fill="#1c211f">CONSOLE · the operator</text>
+  <text x="846" y="390" font-size="12.5" fill="#1c211f">plant cross-section · audit ledger (SSE)</text>
+  <text x="846" y="408" font-size="12.5" fill="#1c211f">request queue · control centre</text>
+  <text x="846" y="426" font-size="12.5" fill="#1c211f">capacity assessment</text>
+  <text x="846" y="452" font-size="12.5" fill="#b03a30">irreversible actions execute only here:</text>
+  <text x="846" y="470" font-size="12.5" fill="#b03a30">readback → confirm → single-use token</text>
+  <text x="846" y="496" font-size="11.5" fill="#5a615e">voice out: Chirp 3 HD, captioned in product</text>
+  <line x1="790" y1="380" x2="830" y2="380" stroke="#5a615e" stroke-width="1.5" marker-end="url(#arr)"/>
+  <line x1="830" y1="400" x2="790" y2="400" stroke="#5a615e" stroke-width="1.5" marker-end="url(#arr)"/>
+  <text x="810" y="368" font-size="10.5" fill="#5a615e" text-anchor="middle">SSE</text>
+  <text x="810" y="418" font-size="10.5" fill="#5a615e" text-anchor="middle">decide</text>
+</svg>

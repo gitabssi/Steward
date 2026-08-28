@@ -143,6 +143,38 @@ async def reconfigure(req: Reconfigure) -> dict:
     return record
 
 
+class Speak(BaseModel):
+    text: str
+
+
+@router.post("/speak")
+async def speak(req: Speak):
+    """The system's voice — Chirp 3 HD, a product surface, not a voice-over.
+
+    The console captions every utterance it plays; if synthesis is
+    unavailable the caption still carries the line (burned-in captions
+    are the primary channel, voice is the secondary one).
+    """
+    from fastapi.responses import Response
+
+    try:
+        from google.cloud import texttospeech
+
+        client = texttospeech.TextToSpeechClient()
+        audio = client.synthesize_speech(
+            input=texttospeech.SynthesisInput(text=req.text[:500]),
+            voice=texttospeech.VoiceSelectionParams(
+                language_code="en-US", name="en-US-Chirp3-HD-Charon"
+            ),
+            audio_config=texttospeech.AudioConfig(
+                audio_encoding=texttospeech.AudioEncoding.MP3, speaking_rate=1.04
+            ),
+        )
+        return Response(content=audio.audio_content, media_type="audio/mpeg")
+    except Exception as exc:
+        return {"error": f"voice unavailable — captions carry the line: {exc}"[:200]}
+
+
 @router.get("/finding")
 async def finding() -> dict:
     """The aggregate backtest finding — precomputed by data/sql/, read here."""

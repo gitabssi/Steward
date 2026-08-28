@@ -18,7 +18,7 @@ from typing import Any
 
 from app.fleet.authority import POLICY, Authority, ToolPolicy
 from app.fleet.events import BUS, EventKind, Outcome
-from app.fleet.identity import READER
+from app.fleet.identity import READER, ScopeDenied
 
 # Set by shift.py at boot; tools fail loudly if the world isn't up yet.
 _WORLD = None
@@ -42,15 +42,24 @@ def _world():
 # --------------------------------------------------------------------------
 
 
+def _scope_denial(exc: Exception) -> dict:
+    """Inside an agent's tool call a denial is data, not an exception —
+    the model reads it, the ledger already recorded it, the loop lives."""
+    return {"denied": True, "reason": str(exc)}
+
+
 def read_station(station: str, facility: str, agent_name: str = "") -> dict:
     """Read current telemetry for one station of one facility.
 
     Args:
         station: station id, e.g. "aeration", "headworks", "outfall".
-        facility: NPDES permit id the reading is for.
+        facility: NPDES permit id the reading is for (your grant names yours).
         agent_name: filled by the calling agent's context.
     """
-    READER.authorize(agent_name, facility, f"station:{station}")
+    try:
+        READER.authorize(agent_name, facility, f"station:{station}")
+    except ScopeDenied as exc:
+        return _scope_denial(exc)
     telemetry = _world().telemetry()
     prefixes = {
         "headworks": ("influent_",),
@@ -65,9 +74,12 @@ def read_station(station: str, facility: str, agent_name: str = "") -> dict:
     }
 
 
-def read_permit_limits(facility: str, agent_name: str = "") -> list[dict]:
+def read_permit_limits(facility: str, agent_name: str = "") -> list[dict] | dict:
     """Enforceable limits in force for the facility (real permit structure)."""
-    READER.authorize(agent_name, facility, "permit-limits")
+    try:
+        READER.authorize(agent_name, facility, "permit-limits")
+    except ScopeDenied as exc:
+        return _scope_denial(exc)
     return _world().seed["permit_limits"]
 
 
@@ -144,7 +156,10 @@ def draft_handover(notes: str, covering_operator: str, agent_name: str = "") -> 
 
 def set_blowers(capacity_pct: float, facility: str, agent_name: str = "") -> dict:
     """Adjust aeration blower capacity. Reversible; ACT authority; scoped."""
-    READER.authorize(agent_name, facility, "actuator:blowers")
+    try:
+        READER.authorize(agent_name, facility, "actuator:blowers")
+    except ScopeDenied as exc:
+        return _scope_denial(exc)
     _world().apply({"kind": "set_blowers", "capacity_pct": capacity_pct})
     BUS.record(
         EventKind.AGENT_STATE,
