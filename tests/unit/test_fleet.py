@@ -6,6 +6,7 @@ exercises a fence a judge can also watch fail-closed in the console.
 
 from __future__ import annotations
 
+import json
 import pathlib
 import sys
 import time
@@ -15,7 +16,13 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from app.fleet.arbiter import Arbiter, Proposal
-from app.fleet.authority import AgentGrant, ApprovalVault, Authority, FleetPolicy, ToolPolicy
+from app.fleet.authority import (
+    AgentGrant,
+    ApprovalVault,
+    Authority,
+    FleetPolicy,
+    ToolPolicy,
+)
 from app.fleet.events import BUS, EventKind
 from app.fleet.guards import screen
 from app.fleet.llm import _parse_contract
@@ -267,5 +274,8 @@ class TestContract:
         assert parsed["say"] == "ok"
 
     def test_garbage_raises(self) -> None:
-        with pytest.raises(Exception):
+        # A response with no contract in it must fail loudly, so the
+        # caller falls back to a deterministic line rather than
+        # inventing one.
+        with pytest.raises((ValueError, json.JSONDecodeError)):
             _parse_contract("no json here")
