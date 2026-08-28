@@ -421,11 +421,34 @@ Devpost submission.*
 
 ## Screenshots
 
+**One frame, and most of the argument.** A live shift with nothing
+staged:
+
+- **`FLEET ON SHIFT 6/6`** — every agent with its authority
+  (`OBSERVE` / `RECOMMEND` / `ACT`) and what it is doing this second.
+  The sixth is `bypass-specialist`, resolved from the **State Primacy
+  Agency** and mounted mid-event: the ledger shows `resolved in 114 ms`.
+- **The fences, counted** — `3 screened · 2 stripped` by Model Armor,
+  with the `DENIED` row naming the instruction it pulled out of an
+  inbound briefing.
+- **The backtest, stated** — 53.9% of 18,338 real exceedances, 51 days
+  early, `TimesFM via BigQuery ML`.
+- **The OT boundary**, drawn down the left edge: Gemma reads the raw
+  telemetry inside it and nothing raw crosses.
+- **Two open contentions** at once — one tanker against three
+  obligations, and the aeration argument — each with costed options and
+  a window.
+- And the visiting specialist speaking its own expertise: *"A
+  wet-weather bypass is unlawful under 40 CFR 122.41(m) because severe
+  property damage is not imminent…"* — an agent from another department
+  citing the regulation it was published to know.
+
+![The fleet at work](docs/screenshots/console-fleet.png)
+
 **A quiet night.** The console is a cross-section of the plant, not a
 dashboard — headworks to outfall to the creek, and from the first frame
 the marker that explains why any of it matters: a municipal intake,
-12,400 served, 8.2 miles downstream. The audit ledger is on screen the
-entire session.
+12,400 served, 8.2 miles downstream.
 
 ![Calm](docs/screenshots/s1-calm.png)
 
