@@ -233,7 +233,8 @@ class ShiftLoop:
             await self.run_contention(telemetry)
         ammonia = telemetry.get("effluent_ammonia_mg_l", 0)
         limit = next(
-            (l for l in self.state.permit_limits if l["parameter"] == "ammonia"), None
+            (row for row in self.state.permit_limits if row["parameter"] == "ammonia"),
+            None,
         )
         if limit and ammonia > 0.6 * limit["limit"] and self.state.pinned_parameter != "ammonia":
             self.state.pinned_parameter = "ammonia"
@@ -480,7 +481,6 @@ class ShiftLoop:
 
     async def capacity_assessment(self) -> None:
         week = self.state.week
-        degraded_tonight = len(self.state.obligations_degraded)
         BUS.record(
             EventKind.CAPACITY,
             "fleet-orchestrator",

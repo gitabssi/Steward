@@ -14,15 +14,11 @@
 
 name: PR Checks
 
+# Requires Workload Identity Federation provisioned by
+# deployment/terraform/cicd. Manual dispatch until that is applied;
+# credential-free checks run in ci.yaml on every push and PR.
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'app/**'
-      - 'tests/**'
-      - 'deployment/**'
-      - 'uv.lock'
+  workflow_dispatch:
 
 jobs:
   test:

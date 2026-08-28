@@ -68,8 +68,8 @@
   <!-- DATA -->
   <rect x="830" y="100" width="330" height="200" fill="#ffffff" stroke="#4e8f3f" stroke-width="1.5"/>
   <text x="846" y="126" font-size="15" font-weight="bold" fill="#4e8f3f">BIGQUERY · the real record</text>
-  <text x="846" y="150" font-size="12.5" fill="#1c211f">EPA ICIS-NPDES: 39M reported values,</text>
-  <text x="846" y="168" font-size="12.5" fill="#1c211f">75K facilities, FY2020–FY2025</text>
+  <text x="846" y="150" font-size="12.5" fill="#1c211f">EPA ICIS-NPDES: 66M reported values,</text>
+  <text x="846" y="168" font-size="12.5" fill="#1c211f">84K facilities, FY2020–FY2025</text>
   <text x="846" y="192" font-size="12.5" fill="#1c211f">TimesFM via AI.FORECAST (serverless):</text>
   <text x="846" y="210" font-size="12.5" fill="#1c211f">P90 exceedance flags, backtested —</text>
   <text x="846" y="228" font-size="12.5" font-weight="bold" fill="#1c211f">53.9% of 18,338 real exceedances,</text>

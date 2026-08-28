@@ -22,13 +22,13 @@ import time
 import uuid
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from opentelemetry import trace as otel_trace
 
 
-class EventKind(str, Enum):
+class EventKind(StrEnum):
     TELEMETRY = "telemetry"  # a value moved somewhere on the plant
     AGENT_STATE = "agent_state"  # an agent changed state (idle/working/quarantined)
     HANDOFF = "handoff"  # one agent passed a finding to another
@@ -46,7 +46,7 @@ class EventKind(str, Enum):
     SYSTEM = "system"  # lifecycle, degradation, fallback notices
 
 
-class Outcome(str, Enum):
+class Outcome(StrEnum):
     ALLOW = "ALLOW"
     DENY = "DENY"
     INFO = "INFO"

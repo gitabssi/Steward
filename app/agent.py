@@ -1,4 +1,3 @@
-# ruff: noqa: E402
 """Steward — the root agent.
 
 The conversational face of the fleet: what a judge meets in the ADK

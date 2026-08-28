@@ -14,15 +14,11 @@
 
 name: Deploy to Staging
 
+# Requires Workload Identity Federation provisioned by
+# deployment/terraform/cicd. Manual dispatch until that is applied;
+# restore the push trigger afterwards.
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'app/**'
-      - 'tests/**'
-      - 'deployment/**'
-      - 'uv.lock'
+  workflow_dispatch:
 
 jobs:
   deploy_and_test_staging:

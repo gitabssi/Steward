@@ -22,8 +22,9 @@ chain (docs/operations.md) and are recorded — never silent.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from app.fleet.authority import POLICY
 from app.fleet.events import BUS, EventKind, Outcome

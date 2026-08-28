@@ -31,8 +31,8 @@ from pathlib import Path
 RAW = Path(__file__).parent / "raw"
 WORK = Path(__file__).parent / "work"
 
-# Projection: enough to (1) build monthly series per facility × outfall ×
-# parameter × statistical base, (2) know the enforceable limit in force on
+# Projection: enough to (1) build monthly series per facility x outfall x
+# parameter x statistical base, (2) know the enforceable limit in force on
 # the row, (3) know when the regulator actually received the value.
 COLUMNS = [
     "EXTERNAL_PERMIT_NMBR",

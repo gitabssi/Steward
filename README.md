@@ -55,7 +55,7 @@ There are **no keys, tokens, or credentials anywhere in this repo or its
 history**; `.env.example` documents every variable.
 
 To rebuild the data spine from the public record: `make data` (pulls
-~4 GB of EPA zips, filters ~160M rows to 39M reported values, loads
+~4 GB of EPA zips, streams ~160M rows down to 66M reported values, loads
 BigQuery), then `make backtest` (three SQL files, in order; the last one
 writes the `finding` table quoted above).
 
@@ -261,7 +261,7 @@ moment it matters, it is evidence the registry does real work.
 - The whole product is **one Cloud Run URL**: `/console` for the
   operator, `/api` for the ledger, `/a2a` for other fleets, ADK's dev UI
   for judges.
-- 33M rows of federal CSV → BigQuery on a normal laptop, streamed
+- 66M rows of federal CSV → BigQuery on a normal laptop, streamed
   straight out of the zips, with nothing unpacked to disk
   ([data/prepare_dmrs.py](data/prepare_dmrs.py)).
 
