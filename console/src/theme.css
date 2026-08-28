@@ -1,0 +1,381 @@
+/* Steward — light reads as a regulated instrument.
+   One warm ground, one ink, colour spent only on state. */
+
+:root {
+  --ground: #f7f5f0;
+  --paper: #fdfcf9;
+  --ink: #1c211f;
+  --ink-soft: #5a615e;
+  --rule: #ddd8cc;
+  --teal: #1f6f6b; /* agent activity */
+  --green: #4e8f3f; /* biology */
+  --amber: #c07d16; /* approaching permit */
+  --red: #b03a30; /* exceedance */
+  --effluent: #7fa9a4;
+  --liquor: #7a6549;
+  --sans: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --serif: "IBM Plex Serif", Georgia, serif;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden; /* one screen. no scrolling. ever. */
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 14px;
+}
+
+.console {
+  display: grid;
+  height: 100vh;
+  grid-template-columns: 1fr 384px;
+  grid-template-rows: 56px 1fr 168px 96px;
+  grid-template-areas:
+    "top    top"
+    "plant  ledger"
+    "permit ledger"
+    "queue  ledger";
+  gap: 1px;
+  background: var(--rule);
+}
+
+.region {
+  background: var(--ground);
+  padding: 12px 16px;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.mono {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- top bar ---- */
+.top {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 0 20px;
+}
+.top .name {
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+}
+.top .cert {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.top .stat {
+  margin-left: auto;
+  display: flex;
+  gap: 28px;
+  align-items: baseline;
+}
+.top .stat .v {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+/* ---- plant cross-section ---- */
+.plant {
+  grid-area: plant;
+  position: relative;
+  padding: 8px 8px 0;
+}
+
+/* ---- permit lines ---- */
+.permit {
+  grid-area: permit;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 24px;
+  align-items: stretch;
+  padding: 10px 20px 14px;
+}
+.param {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition:
+    transform 0.6s ease,
+    opacity 0.6s ease;
+}
+.param.pinned {
+  transform: scale(1.06);
+}
+.param.demoted {
+  opacity: 0.45;
+}
+.param .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.param .val {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+}
+.param .lim {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-soft);
+}
+.bar {
+  position: relative;
+  height: 44px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+}
+.bar .fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  transition: height 1.2s ease;
+}
+.bar .line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-top: 1.5px solid var(--ink);
+}
+.bar .line::after {
+  content: "PERMIT";
+  position: absolute;
+  right: 2px;
+  top: -11px;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+}
+
+/* ---- ledger ---- */
+.ledger {
+  grid-area: ledger;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+}
+.ledger .rows {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+.lrow {
+  padding: 6px 14px;
+  border-bottom: 1px solid #efece4;
+  font-size: 12px;
+  line-height: 1.45;
+  animation: settle 0.5s ease;
+}
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.lrow .who {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--teal);
+}
+.lrow .trace {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
+.lrow.deny .who,
+.lrow.deny .verdict {
+  color: var(--red);
+}
+.lrow .verdict {
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+}
+
+/* ---- request queue ---- */
+.queue {
+  grid-area: queue;
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  padding: 10px 20px;
+}
+.request {
+  flex: 1;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--amber);
+  padding: 8px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.request .subject {
+  font-weight: 600;
+  font-size: 13px;
+}
+.request .options {
+  display: flex;
+  gap: 8px;
+}
+.request button {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  padding: 5px 10px;
+  background: var(--ground);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  cursor: pointer;
+}
+.request button:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+/* ---- system line (captions) ---- */
+.sysline {
+  position: absolute;
+  left: 24px;
+  bottom: 18px;
+  right: 24px;
+  font-size: 15px;
+  line-height: 1.4;
+  min-height: 22px;
+}
+.sysline .speaker {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--teal);
+  letter-spacing: 0.06em;
+}
+
+/* ---- control centre drawer ---- */
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 560px;
+  background: var(--paper);
+  border-left: 1px solid var(--rule);
+  box-shadow: -24px 0 48px rgba(28, 33, 31, 0.08);
+  transform: translateX(100%);
+  transition: transform 0.35s ease;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  padding: 20px 24px;
+  overflow-y: auto;
+}
+.drawer.open {
+  transform: translateX(0);
+}
+.agent-card {
+  border: 1px solid var(--rule);
+  background: var(--ground);
+  padding: 10px 14px;
+  margin-top: 10px;
+}
+.agent-card .id {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--teal);
+}
+.agent-card.quarantined {
+  border-left: 3px solid var(--red);
+}
+.authority-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border: 1px solid var(--rule);
+  cursor: pointer;
+}
+.authority-pill.active {
+  background: var(--ink);
+  color: var(--ground);
+  border-color: var(--ink);
+}
+
+/* ---- capacity assessment (the artifact that leaves the system) ---- */
+.capacity {
+  position: fixed;
+  inset: 0;
+  background: #efe9dc;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fade 1.2s ease;
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+.capacity .sheet {
+  width: 720px;
+  background: #fbf8f1;
+  box-shadow: 0 2px 40px rgba(28, 33, 31, 0.18);
+  padding: 64px 72px;
+  font-family: var(--serif);
+}
+.capacity h1 {
+  font-size: 46px;
+  line-height: 1.15;
+  font-weight: 500;
+  margin-bottom: 28px;
+}
+.capacity p {
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+.capacity .fine {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+/* ---- honesty line ---- */
+.honesty {
+  position: fixed;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  z-index: 20;
+}

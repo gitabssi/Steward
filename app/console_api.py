@@ -36,8 +36,22 @@ from app.fleet.memory import MEMORY
 router = APIRouter(prefix="/api")
 
 
+def _ensure_shift() -> None:
+    """Boot the shift loop on first console contact (idempotent).
+
+    The generated ADK app owns the ASGI lifespan, so the loop starts
+    lazily here rather than in a startup hook — same behaviour under
+    uvicorn locally, Cloud Run, and Agent Runtime.
+    """
+    seed = os.environ.get("STEWARD_FACILITY_SEED", "fixtures/seeds/cedar-ridge.json")
+    if os.environ.get("STEWARD_SHIFT", "1") == "1" and os.path.exists(seed):
+        shift.boot(seed)
+
+
 @router.get("/events")
 async def events() -> StreamingResponse:
+    _ensure_shift()
+
     async def stream():
         async for entry in BUS.subscribe(replay=300):
             yield f"data: {entry.to_json()}\n\n"
@@ -51,6 +65,7 @@ async def events() -> StreamingResponse:
 
 @router.get("/state")
 async def state() -> dict:
+    _ensure_shift()
     loop = shift.LOOP
     if loop is None:
         return {"status": "shift loop not started"}
@@ -80,6 +95,7 @@ async def state() -> dict:
 
 @router.get("/roster")
 async def roster() -> dict:
+    _ensure_shift()
     scopes = describe_scopes()
     facts = MEMORY.facts()
     registry = shift.LOOP.registry.roster() if shift.LOOP else []
@@ -144,9 +160,11 @@ async def finding() -> dict:
 
 def attach_console_routes(app: FastAPI) -> None:
     app.include_router(router)
-    seed = os.environ.get("STEWARD_FACILITY_SEED", "fixtures/seeds/cedar-ridge.json")
-    if os.environ.get("STEWARD_SHIFT", "1") == "1" and os.path.exists(seed):
+    # The built console (console/dist) is served by the same service, so
+    # one Cloud Run URL is the whole product: /console for the operator,
+    # /api for the data, /a2a for other fleets, ADK's dev UI for judges.
+    dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "console", "dist")
+    if os.path.isdir(dist):
+        from fastapi.staticfiles import StaticFiles
 
-        @app.on_event("startup")
-        async def _start_shift() -> None:
-            shift.boot(seed)
+        app.mount("/console", StaticFiles(directory=dist, html=True), name="console")

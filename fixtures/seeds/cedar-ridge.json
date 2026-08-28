@@ -1,5 +1,5 @@
 {
-  "_what_this_is": "A scenario seed. It contains only what a real facility would produce: configuration, telemetry baselines, arriving documents, weather, equipment states. It never contains agent behaviour — nothing here says 'mount the specialist' or 'quarantine the worker'. Those are genuine responses of the fleet. Hand this file to a completely different implementation and it still makes sense.",
+  "_what_this_is": "A scenario seed. It contains only what a real facility would produce: configuration, telemetry baselines, arriving documents, weather, equipment states. It never contains agent behaviour — no line here tells the fleet what to do or which specialist to bring in. Those are the fleet's genuine responses. Hand this file to a completely different implementation and it still makes sense.",
   "facility": {
     "name": "Cedar Ridge Water Reclamation Facility",
     "npdes_id": "REP-0042051",

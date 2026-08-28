@@ -12,6 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Stage 1: the operator's console, built from source so a clean clone
+# deploys in one command with nothing prebuilt.
+FROM node:22-slim AS console
+WORKDIR /console
+COPY ./console/package.json ./console/package-lock.json* ./
+RUN npm install --no-fund --no-audit
+COPY ./console .
+RUN npm run build
+
+# Stage 2: the fleet.
 FROM python:3.12-slim
 
 RUN pip install --no-cache-dir uv==0.8.13
@@ -21,6 +31,8 @@ WORKDIR /code
 COPY ./pyproject.toml ./README.md ./uv.lock* ./
 
 COPY ./app ./app
+COPY ./fixtures ./fixtures
+COPY --from=console /console/dist ./console/dist
 
 RUN uv sync --frozen
 

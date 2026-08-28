@@ -91,6 +91,8 @@ def _excise(text: str) -> tuple[str, list[str]]:
             stripped.append(line.strip())
         else:
             kept_lines.append(line)
+    if not stripped:
+        return text, []  # untouched means byte-identical, trailing newline included
     return "\n".join(kept_lines), stripped
 
 
