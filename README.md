@@ -12,6 +12,7 @@ every irreversible decision back in his hands.
 - Operator console (Cloud Run): **https://steward-fleet-649854119911.us-central1.run.app/console/**
 - Fleet API / A2A / audit-ledger SSE: `https://steward-fleet-649854119911.us-central1.run.app` (`/api/state`, `/api/events`, `/api/finding`)
 - State primacy agency publisher (the second department): `https://primacy-agency-649854119911.us-central1.run.app/.well-known/agent-card.json`
+- Gemma edge, inside the OT boundary: `https://steward-edge-i64yn4kmyq-uc.a.run.app` (`/health`, `/transcribe`)
 - Long-lived fleet on **Vertex AI Agent Runtime**: reasoning engine `6520690542165098496`, `us-central1`, agent identity enabled
 
 **The finding this repo reproduces** — every number written by
