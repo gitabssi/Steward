@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import time
 
 import pytest
 
@@ -18,7 +19,7 @@ from app.fleet.authority import AgentGrant, ApprovalVault, Authority, FleetPolic
 from app.fleet.events import BUS, EventKind
 from app.fleet.guards import screen
 from app.fleet.llm import _parse_contract
-from app.fleet.supervisor import Claim, Supervisor
+from app.fleet.supervisor import RELATIVE_TOLERANCE, Claim, Supervisor
 from fixtures.replay import World
 
 SEED = pathlib.Path(__file__).resolve().parents[2] / "fixtures/seeds/cedar-ridge.json"
@@ -181,6 +182,60 @@ class TestArbiter:
         contention = arbiter.open_contention("routine")
         arbiter.submit(contention, Proposal("a", "a@t", "log reading", "routine", [], 60))
         assert arbiter.resolve(contention)["resolution"] == "proceed"
+
+
+class TestStaleBriefing:
+    """The chaos harness must actually produce a catchable contradiction.
+
+    Serving a reader forty-minute-old telemetry is only a useful fault if
+    the numbers have moved enough for the supervisor to notice. During
+    the infiltration surge they move by multiples — these tests pin that
+    down so the beat cannot quietly stop working.
+    """
+
+    def _world_at(self, minute: float) -> World:
+        world = World(SEED, minutes_per_second=25)
+        deadline = time.time() + 20
+        while world.minutes < minute and time.time() < deadline:
+            world.telemetry()
+            time.sleep(0.005)
+        return world
+
+    def test_stale_readings_contradict_live_ones_mid_surge(self) -> None:
+        world = self._world_at(52)
+        live, stale = world.telemetry(), world.telemetry_as_of(40)
+        deviations = {
+            key: abs(live[key] - stale[key]) / max(abs(live[key]), 1e-9)
+            for key in ("aeration_do_mg_l", "effluent_ammonia_mg_l", "influent_flow_mgd")
+        }
+        # Every one of these is what a specialist would naturally cite.
+        for key, dev in deviations.items():
+            assert dev > RELATIVE_TOLERANCE, f"{key} only differs by {dev:.0%}"
+
+    def test_the_supervisor_quarantines_a_stale_citation(self) -> None:
+        from app.fleet.authority import POLICY
+
+        world = self._world_at(52)
+        stale = world.telemetry_as_of(40)
+        POLICY.grant(
+            AgentGrant("stale_worker", "stale-worker@test", "FAC-1", Authority.RECOMMEND)
+        )
+        supervisor = Supervisor(read_source=world.read_source)
+        # The worker asserts, in good faith, what its briefing told it.
+        ok = supervisor.audit(
+            Claim(
+                "stale_worker",
+                "aeration_do_mg_l",
+                stale["aeration_do_mg_l"],
+                source="sensor:aeration_do_mg_l",
+            )
+        )
+        assert not ok
+        assert POLICY.grants["stale_worker"].quarantined
+
+    def test_history_is_bounded(self) -> None:
+        world = self._world_at(30)
+        assert len(world._history) <= 200
 
 
 class TestWorld:

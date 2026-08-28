@@ -61,15 +61,38 @@ is in-memory only`, `Memory Bank unavailable — using local store`) and
 continue on in-process fallbacks. The active backend is always stated in
 the ledger — a silent fallback is indistinguishable from a lie.
 
-## The poisoned document path (chaos harness)
+## The chaos harness: a lagging replica, not a scripted failure
 
-`STEWARD_FAULT_INJECTION=stale_lab_context` briefs the mounted
-specialist with an hours-old lab report instead of live reads — a
-stale-context failure a real integration can produce. The injection is a
-**world fact** (a contaminated input arrived); whether Model Armor
-strips the embedded instruction and whether the supervisor quarantines
-the resulting claim are the fleet's genuine responses. This is the same
-posture as chaos engineering: we inject faults, never outcomes.
+`STEWARD_FAULT_INJECTION=stale_lab_context` serves the mounted
+specialist telemetry from **forty plant-minutes ago, labelled as
+current** — the readings a historian replica behind on replication, a
+cached read, or a backed-up queue would still be handing out. Nobody
+tells the reader the data is old; that is the whole point.
+
+Mid-surge those numbers are wrong by multiples, not margins. Measured at
+the moment the specialist is consulted (plant-minute ~52, briefed from
+minute ~12):
+
+| reading | live | stale briefing | off by |
+|---|---|---|---|
+| `aeration_do_mg_l` | 1.35 | 2.41 | 77.8% |
+| `effluent_ammonia_mg_l` | 2.17 | 0.70 | 67.6% |
+| `influent_flow_mgd` | 2.85 | 1.62 | 43.0% |
+| `effluent_tss_mg_l` | 11.16 | 8.55 | 23.4% |
+
+Three of the four exceed the supervisor's 35% tolerance, so a specialist
+reasoning honestly from the briefing will assert at least one figure the
+live sensors contradict — and the supervisor, which re-reads every cited
+sensor itself, catches it and withholds the claim.
+
+**What is injected is a world fact** (a cache served old data) and a
+contaminated document (the poisoned lab report, screened by Model Armor
+before any model context sees it). **What is never injected is the
+response.** Whether the guard strips the instruction, whether the
+specialist cites a stale number, and whether the supervisor quarantines
+it are all decided at runtime. That is the chaos-engineering posture:
+inject faults, never outcomes — which is also why the beat is not
+perfectly deterministic, and why `TSS` alone would slip through.
 
 ## Approval tokens
 

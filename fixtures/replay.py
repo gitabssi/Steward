@@ -41,6 +41,7 @@ class World:
         }
         self.actions: list[dict[str, Any]] = []  # operator/agent actions with effects
         self._delivered_events: set[int] = set()
+        self._history: list[tuple[float, dict[str, float]]] = []
 
     # -- clock --------------------------------------------------------------
 
@@ -92,7 +93,28 @@ class World:
         # A breath of measurement texture, so nothing renders as a flat wire.
         for key in v:
             v[key] = round(v[key] * (1 + 0.006 * math.sin(t * 2.1 + hash(key) % 7)), 3)
+
+        # Keep a coarse history. A real plant has a historian, and a real
+        # integration can serve a reader something forty minutes old
+        # without saying so — which is the failure the supervisor exists
+        # to catch. Sampling every ~2 plant-minutes is plenty.
+        if not self._history or t - self._history[-1][0] >= 2:
+            self._history.append((t, dict(v)))
+            del self._history[:-200]
         return v
+
+    def telemetry_as_of(self, minutes_ago: float) -> dict[str, float]:
+        """The readings a stale cache would still be serving.
+
+        Returns the oldest sample within the window if there is one, so
+        a caller asking for "forty minutes ago" during a surge gets
+        genuinely pre-surge numbers rather than a rounded copy of now.
+        """
+        if not self._history:
+            return self.telemetry()
+        target = max(0.0, self.minutes - minutes_ago)
+        best = min(self._history, key=lambda row: abs(row[0] - target))
+        return dict(best[1])
 
     def _event(self, kind: str, subkind: str | None = None) -> dict | None:
         for event in self.seed["timeline"]:
