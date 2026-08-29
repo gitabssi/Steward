@@ -1,86 +1,120 @@
-<div align="center">
-
 # STEWARD
 
-### *The town downstream drinks what he sends.*
+> **The town downstream drinks what he sends.**
 
-**A fleet of long-lived agents beside a part-time wastewater operator —
-forecasting permit exceedances before they happen, arguing with itself
-in the open when no fix is free, and handing every irreversible decision
-back to the human whose licence is on the line.**
+Half the drinking-water intakes serving larger American communities sit
+downstream of somebody's wastewater discharge. The plants are permitted,
+sampled and reported — and at thousands of small municipal facilities
+**one person watches. Part-time. Often across three sites. Alone.**
 
-[**Open the live console →**](https://steward-fleet-649854119911.us-central1.run.app/console/) · [Read the finding](https://steward-fleet-649854119911.us-central1.run.app/api/finding) · [Watch the audit ledger](https://steward-fleet-649854119911.us-central1.run.app/api/events)
+He holds a state certification, which means the legal responsibility for
+everything leaving that outfall is his, personally. Not his employer's.
+Not the software's. Nobody knows his name until something goes wrong.
 
-*All Things Agentic Hackathon · **Fortified Enterprise Fleet** · built
-solo in Casablanca · created for the purposes of entering this hackathon*
+He is a **watershed steward** — a real term of art for a real job
+classification with a licence number, and the *Unlikely Hero* this track
+asks for. Not a persona invented to fit a brief.
 
-</div>
+Steward gives him a fleet of long-lived agents that forecasts permit
+exceedances before they happen, argues with itself in the open when no
+fix is free, and hands every irreversible decision back to him.
 
----
+**Live:** [console](https://steward-fleet-649854119911.us-central1.run.app/console/) ·
+[audit ledger](https://steward-fleet-649854119911.us-central1.run.app/api/events) ·
+[the finding](https://steward-fleet-649854119911.us-central1.run.app/api/finding)
 
-## The finding
-
-Most agent demos are judged on whether the demo works. This one can be
-checked against reality, because it was run against **the EPA's entire
-public discharge record** rather than a simulation:
-
-> ### 53.9%
-> of the **18,338 permit exceedances that actually happened** would have
-> been flagged — a median of **51 days** before the monthly report
-> surfaced them.
->
-> Across **10,396 real municipal facilities** and **6,030,868 real
-> reported discharge values** (2019-10 → 2025-09), held-out six-month
-> window, **enforceable limits only**. Precision 25.2% against a 3.6%
-> base rate — a **7× enrichment**.
-
-Every number is written by [`data/sql/03_finding.sql`](data/sql/03_finding.sql)
-and served live at [`/api/finding`](https://steward-fleet-649854119911.us-central1.run.app/api/finding).
-None was typed by hand. `make data && make backtest` re-derives all of
-them from the public record on your own machine.
-
-**No other entry can show you this**, because it requires operating on
-real national production data rather than a plant someone invented.
+*All Things Agentic Hackathon · Fortified Enterprise Fleet · built solo
+in Casablanca · created for the purposes of entering this hackathon.*
 
 ---
 
-## Sixty seconds, if that is all you have
+## Architecture
+
+![Steward architecture](docs/architecture.svg)
+
+Three processes, split along the line that matters — the boundary
+between the plant's operational network and everything else.
+
+**`edge/` — inside the OT segment.** Raw SCADA telemetry and the
+operator's dictated notes cannot lawfully leave a segmented
+critical-infrastructure network. Gemma runs *there*, self-hosted, and
+emits structured de-identified summaries. It is never a Vertex API call,
+because an API call would mean the raw data had already crossed the
+boundary the service exists to enforce.
+
+**`fleet/` — on Agent Runtime.** A long-lived shift loop per facility:
+five station agents anchored where they govern (flow at the headworks,
+biology on the aeration basin, the permit at the outfall, weather over
+the creek, a clerk who only drafts), a supervisor auditing every claim,
+an arbiter resolving contention, and a registry that mounts specialists
+from other departments on demand.
+
+**`fixtures/` — the honest simulation boundary.** Monthly reported
+values, permit limits and exceedances are real, from the EPA record.
+High-frequency telemetry between them is interpolated, because real
+plants have it and the public record does not. Seeds contain world facts
+only — never agent behaviour, and a test enforces that line.
+
+State that must outlive the process lives outside it: Firestore for the
+ledger, Memory Bank for learned facts, BigQuery for the record.
+
+
+## Security — the fences, and how they are enforced
+
+Fortification here is structural, not rhetorical. Every claim below is
+enforced in code and covered by a test, and every outcome — allowance
+*and* refusal — is an attributed row in the audit ledger carrying a
+Cloud Trace id.
+
+| Fence | Mechanism | Failure mode |
+|---|---|---|
+| **Least privilege** | Three authority levels (`observe` / `recommend` / `act`) checked by an ADK plugin **before every tool call**, not described in a prompt | A `recommend` agent calling an `act` tool is refused and the refusal is recorded |
+| **Zero-trust identity** | The caller's identity comes from the execution context, never from model output — a model cannot name itself into a scope it lacks | An agent scoped to one facility requesting another's records is **denied** |
+| **Human authority** | Irreversible tools require a single-use token bound to one action fingerprint, minted only by the operator's confirmed decision, expiring in 5 minutes | No agent at any authority level can execute one alone; replaying a burnt token fails |
+| **Prompt-injection defence** | Model Armor screens every inbound document before any model context sees it | The instruction is stripped, the reported values are kept, and the ledger names the screener that ran |
+| **Hallucination containment** | The supervisor re-reads the source each worker cites and compares | No source, or a contradiction beyond tolerance → the claim is **withheld from the operator**, the worker quarantined mid-shift, the task re-issued |
+| **Runaway containment** | Step budget and a hard wall-clock ceiling charged in the same loop that would spend the tokens | A worker that loops *or hangs* is stopped and re-issued, never left running |
+
+The operator carries the legal consequence personally, so he keeps the
+decision. That is the reason for the design, and it is why the fleet is
+deliberately not fully autonomous.
+
+Detail: [separation of concerns](#separation-of-concerns--who-may-do-what-and-why) ·
+[failure tolerance](#failure-tolerance) ·
+[which screener ran](#which-screener-ran-and-why-the-ledger-says-so)
+
+
+## The Google platform stack
+
+
+Seven capabilities, what Steward does with each, and the command that
+proves it. Every fence names the path that actually ran — managed
+service or fallback — because a fallback nobody can see is
+indistinguishable from a claim.
+
+| Capability | What Steward does with it | Verify |
+|---|---|---|
+| **Agent Registry** | Discovery queries `agentregistry.googleapis.com`; the bundled catalog is the *named* fallback. **Both publishers registered**: the fleet auto-registered on deploy, the state primacy agency as an external `Service` with its A2A card. Consumer pins are enforced — an incompatible major version is refused on the record | `curl … /v1/projects/steward-fleet-2026/locations/us-central1/services` ([below](#cataloged-for-cross-department-use)) |
+| **Agent Runtime** | The shift loop runs as a long-lived engine, `6520690542165098496` | `curl $BASE \| jq .spec.identityType` |
+| **Memory Bank** | The learned-facts store. Written via `add_memory`, **hydrated at boot** so one shift starts with what the last one learned | live ledger: `backend=memory-bank` |
+| **Agent Identity** | The engine holds its **own workload identity**, not a shared service account. Per-agent scoping on top is in-process policy — deliberately, see [separation of concerns](#separation-of-concerns--who-may-do-what-and-why) | `jq .spec.effectiveIdentity` |
+| **Model Armor** | Every inbound document is screened before any model context sees it | live ledger: `screener: model-armor` |
+| **Agent Observability** | Spans authored per job → task → audit → contention, so a ledger row's trace id resolves to the reasoning that produced it | any ledger row's `trace_id` in Cloud Trace |
+| **Agent Gateway** | **Not deployed.** The container is gateway-ready (the Dockerfile trusts the gateway root CA when the platform injects one), but we did not stand a gateway up — it is egress-focused and that is not where this fleet's risk lives. Said plainly rather than implied | — |
+
+Read the live ledger and watch these announce themselves:
 
 ```bash
-# 1 · the finding, straight from BigQuery — no credentials needed
-curl -s https://steward-fleet-649854119911.us-central1.run.app/api/finding
-
-# 2 · the fleet's own audit ledger, live, naming the managed service
-#     behind every fence it enforces
 curl -sN https://steward-fleet-649854119911.us-central1.run.app/api/events \
-  | grep -o '"screener": "[a-z-]*"\|"backend": "[a-z-]*"'
-
-# 3 · the whole thing on your machine — 41 tests, no cloud, no keys
-git clone https://github.com/gitabssi/Steward && cd Steward
-make install && make test && make replay SPEED=fast
+  | grep -o '"screener": "[a-z-]*"\|"backend": "[a-z-]*"\|"registry": "[a-z-]*"'
 ```
 
-Then open [the console](https://steward-fleet-649854119911.us-central1.run.app/console/)
-and let a shift run. You are watching real agents reason, disagree, get
-quarantined, and ask a human for permission.
+Every one of those rows names the path that actually ran — managed
+service or fallback. That mechanism is the point: **a fallback nobody
+can see is indistinguishable from a claim.**
 
-![The fleet at work](docs/screenshots/console-fleet.png)
+## The creative core: a fleet whose deliverable is what it could not do
 
----
-
-## What a judge is looking for, and where it is
-
-| Criterion | Where |
-|---|---|
-| **Innovation & Operational Utility (40%)** | An **Unlikely Hero** who is a job classification, not a persona ([why](#why-this-exists)). The **coupling beat** — agents that *disagree*, each correctly ([below](#the-twist-a-fleet-whose-deliverable-is-what-it-could-not-do)). The **Capacity Assessment**, a weekly artifact documenting the limits of automation |
-| **Architectural Discipline (30%)** — *the Multi-Agent Nexus* | [Separation of concerns](#separation-of-concerns--who-may-do-what-and-why) enforced per tool call, not described. [Failure tolerance](#failure-tolerance--the-questions-judges-asked-answered-by-name): a worker that hallucinates is quarantined mid-shift and its task re-issued; one that loops or hangs is stopped by a real ceiling |
-| **Demo & Production Readiness (30%)** — *Proof of Action* | Three live Cloud Run services, a long-lived Agent Runtime engine, an audit ledger with resolvable Cloud Trace ids, [one-command deploy](#run-it), CI green from a clean clone |
-| **cross-department** | Two publishers in the **managed Agent Registry**, one of them another organisation ([proof](#cataloged-for-cross-department-use)) |
-| **data sovereignty** | Gemma self-hosted [inside the OT boundary](#the-edge-live--and-what-it-cost-to-get-there) — never an API call, because an API call would defeat the property |
-
----
-
-## The Twist: a fleet whose deliverable is what it *could not* do
 
 Nothing at a treatment plant moves alone. Raising the blowers rescues
 the starving biology, shortens retention time, and carries solids over
@@ -109,145 +143,25 @@ automation.
 - Gemma edge, inside the OT boundary: `https://steward-edge-i64yn4kmyq-uc.a.run.app` (`/health`, `/transcribe`)
 - Long-lived fleet on **Vertex AI Agent Runtime**: reasoning engine `6520690542165098496`, `us-central1`, agent identity enabled
 
-## The platform stack, and how to check each claim
+## How the platform was actually used
 
-The track names seven capabilities. Here is what Steward does with each
-one, and the command that proves it — because a claim a judge cannot
-verify is worth less than one they can.
 
-| Capability | What Steward does with it | Verify |
-|---|---|---|
-| **Agent Registry** | Discovery queries `agentregistry.googleapis.com`; the bundled catalog is the *named* fallback. **Both publishers registered**: the fleet auto-registered on deploy, the state primacy agency as an external `Service` with its A2A card. Consumer pins are enforced — an incompatible major version is refused on the record | `curl … /v1/projects/steward-fleet-2026/locations/us-central1/services` ([below](#cataloged-for-cross-department-use)) |
-| **Agent Runtime** | The shift loop runs as a long-lived engine, `6520690542165098496` | `curl $BASE \| jq .spec.identityType` |
-| **Memory Bank** | The learned-facts store. Written via `add_memory`, **hydrated at boot** so one shift starts with what the last one learned | live ledger: `backend=memory-bank` |
-| **Agent Identity** | The engine holds its **own workload identity**, not a shared service account. Per-agent scoping on top is in-process policy — deliberately, see [separation of concerns](#separation-of-concerns--who-may-do-what-and-why) | `jq .spec.effectiveIdentity` |
-| **Model Armor** | Every inbound document is screened before any model context sees it | live ledger: `screener: model-armor` |
-| **Agent Observability** | Spans authored per job → task → audit → contention, so a ledger row's trace id resolves to the reasoning that produced it | any ledger row's `trace_id` in Cloud Trace |
-| **Agent Gateway** | **Not deployed.** The container is gateway-ready (the Dockerfile trusts the gateway root CA when the platform injects one), but we did not stand a gateway up — it is egress-focused and that is not where this fleet's risk lives. Said plainly rather than implied | — |
+*(The scannable version is [at the top](#the-google-platform-stack). This is the detail: not a list of logos, but where each service's output actually shows up in the product.)*
 
-Read the live ledger and watch these announce themselves:
-
-```bash
-curl -sN https://steward-fleet-649854119911.us-central1.run.app/api/events \
-  | grep -o '"screener": "[a-z-]*"\|"backend": "[a-z-]*"\|"registry": "[a-z-]*"'
-```
-
-Every one of those rows names the path that actually ran — managed
-service or fallback. That mechanism is the point: **a fallback nobody
-can see is indistinguishable from a claim.**
-
-## Why this exists
-
-About half of the drinking-water intakes serving larger communities in
-the continental US sit **downstream of somebody's wastewater
-discharge**. The EPA calls it *de facto reuse*. In a dry summer, at some
-of them, most of what is in the river came out of a treatment plant
-upstream.
-
-Those plants are permitted, sampled and reported. And at thousands of
-small municipal facilities, **one person watches. Part-time. Often
-across three sites. Alone.** He holds a state certification, which means
-the legal responsibility for everything leaving that outfall is *his*,
-personally — not his employer's, not the software's. Nobody knows his
-name until something goes wrong.
-
-The track asks for an **Unlikely Hero outside standard corporate roles**.
-Every other entry in this category serves an AP clerk, an SRE, a lawyer,
-a procurement manager. This one serves a **watershed steward** — a real
-term of art for a real job classification with a licence number. He is
-not a persona invented to fit a brief.
-
-**What the fleet gives him:** five agents at their stations — flow at
-the headworks, biology on the aeration basin, the permit at the outfall,
-weather over the creek, a clerk who only ever drafts. Above them a
-supervisor that checks every number against the source the agent cited,
-an arbiter that surfaces disagreement instead of hiding it, and a
-registry that pulls in specialists from other departments when a
-condition surfaces a role nobody catalogued.
-
-**What it will not give him:** an autonomous decision. He carries the
-consequence personally, so he keeps the choice. That is enforced, not
-promised — see [why this fleet is deliberately not fully
-autonomous](#why-this-fleet-is-deliberately-not-fully-autonomous).
-
----
-
-## Run it
-
-```bash
-# local, one command → console at http://localhost:8000/console/
-# (fleet + console on :8000, state primacy agency publisher on :8091)
-make install && make dev
-
-# the tests a review tool should run first — 41 policy tests, no cloud needed
-make test
-
-# replay a whole shift from the top (SPEED=fast|demo|real)
-make replay SPEED=fast
-
-# deploy: fleet → Vertex AI Agent Runtime (long-lived, agent identity)
-make deploy
-
-# deploy: everything → Cloud Run (fleet+console, primacy publisher, Gemma edge)
-make deploy-all
-
-# rebuild the data spine and the finding from the public record
-make data && make backtest
-```
-
-[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run?git_repo=https://github.com/gitabssi/Steward)
-
-Auth is Application Default Credentials / Workload Identity throughout.
-**No keys, tokens, or credentials exist anywhere in this repo or its
-history**; [.env.example](.env.example) documents every variable.
-
-**Verify the deployed fleet yourself** — this is a live Agent Runtime
-engine holding its own workload identity (not a shared service account):
-
-```bash
-TOKEN=$(gcloud auth print-access-token)
-BASE=https://us-central1-aiplatform.googleapis.com/v1/projects/steward-fleet-2026/locations/us-central1/reasoningEngines/6520690542165098496
-
-# the engine's own identity + exported methods
-curl -s -H "Authorization: Bearer $TOKEN" $BASE | jq '.spec.identityType, .spec.effectiveIdentity'
-
-# open a session on the live fleet
-curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  $BASE:query -d '{"class_method":"create_session","input":{"user_id":"judge"}}'
-```
-
-Or, with no credentials at all, read the running fleet's own audit
-ledger and its BigQuery-computed finding:
-
-```bash
-curl -s https://steward-fleet-649854119911.us-central1.run.app/api/finding
-curl -sN https://steward-fleet-649854119911.us-central1.run.app/api/events | head -20
-```
-
----
-
-## Folder structure — where to look, in the order judges tend to ask
-
-| Path | What it is |
+| Piece | Where it works |
 |---|---|
-| [app/agent.py](app/agent.py) | Root orchestrator (ADK). What the playground, A2A, and the Vertex console talk to |
-| [app/fleet/](app/fleet/) | The fleet: [authority.py](app/fleet/authority.py) (observe/recommend/act, enforced per tool call), [identity.py](app/fleet/identity.py) (per-facility scope; cross-facility reads denied), [supervisor.py](app/fleet/supervisor.py) (claim audit → quarantine → re-issue), [arbiter.py](app/fleet/arbiter.py) (agents that disagree), [guards.py](app/fleet/guards.py) (Model Armor at the document boundary), [registry.py](app/fleet/registry.py) (catalog cache + live A2A resolve), [memory.py](app/fleet/memory.py) (learned facts w/ observation counts), [events.py](app/fleet/events.py) (the audit ledger), [shift.py](app/fleet/shift.py) (the long-lived loop Agent Runtime keeps alive) |
-| [app/fleet/agents/workers.py](app/fleet/agents/workers.py) | The five station agents and the mounted specialist — personas, tools, grants |
-| [app/console_api.py](app/console_api.py) | SSE ledger stream, the operator's narrow write paths, Chirp voice out |
-| [console/](console/) | The operator's console (React/Vite): a cross-section of the plant, not a dashboard |
-| [fixtures/](fixtures/) | The honest simulation boundary: [replay.py](fixtures/replay.py) interpolates telemetry *between* real reported values; [seeds/](fixtures/seeds/) hold world facts only — never agent behaviour (that boundary has a test) |
-| [data/](data/) | The real-data spine: EPA pull/prepare/load scripts and the three backtest SQL files |
-| [edge/](edge/) | Self-hosted Gemma inside the OT boundary (its own Cloud Run service) |
-| [primacy/](primacy/) | The state primacy agency's A2A publisher — the second department, registered in Agent Registry |
-| [app/fleet/memory_bank.py](app/fleet/memory_bank.py) | Vertex AI Memory Bank behind one door: regional, scoped, and honest about its fallback |
-| [app/fleet/tracing.py](app/fleet/tracing.py) | The spans that make a ledger trace id resolve to a reasoning chain |
-| [deployment/](deployment/) | Terraform (single-project + CI/CD with Workload Identity Federation), generated by agents-cli |
-| [docs/operations.md](docs/operations.md) | Failure and recovery: quarantine, token runaway, endpoint fallback, partial failure |
-| [tests/unit/test_fleet.py](tests/unit/test_fleet.py) | The fences, tested |
+| **Agent Runtime** | The fleet, deployed long-lived with `--agent-identity` (`make deploy`); the platform serves its A2A card |
+| **Agent Registry + A2A** | `agentregistry.googleapis.com` queried for discovery, bundled catalog as the named fallback. Both publishers registered: the fleet auto-registered on deploy, the primacy agency as an external `Service`. Version pinning refuses an incompatible mount |
+| **BigQuery** | The national NPDES corpus (66M reported values), the backtest, ADK's BigQuery agent-analytics plugin |
+| **Memory Bank** | The learned-facts store: written via `add_memory`, hydrated at boot ([app/fleet/memory_bank.py](app/fleet/memory_bank.py)). Local store is the fallback and the ledger names which is live |
+| **Model Armor** | Inbound document screen ([app/fleet/guards.py](app/fleet/guards.py)) — `sanitizeUserPrompt` against a jailbreak/prompt-injection template. See the honesty note below on which path the deployed demo actually runs |
+| **Cloud Trace / Logging** | Spans authored per job, task, audit and contention ([app/fleet/tracing.py](app/fleet/tracing.py)); a ledger row's trace id resolves to the reasoning that produced it |
+| **Firestore** | Live per-facility state and the persisted ledger |
+| **Cloud Run** | Fleet+console, the primacy publisher, and the Gemma edge — three services, three identities |
+| **Gemini 3.7 Flash** | Every worker's reasoning: proposals, contentions, assessments, handovers |
 
----
+## The track's three must-demonstrates
 
-## The track's three must-demonstrates, by name
 
 ### Cataloged for cross-department use
 
@@ -350,35 +264,34 @@ demonstrate.** Inbound documents cross a Model Armor screen before any
 model context sees them. Irreversible actions require a single-use
 token minted only by the operator's confirmed decision.
 
-## Why this fleet is deliberately not fully autonomous
+## The finding
 
-The operator carries the legal responsibility personally: his
-certification is on the line, not the software's. A fleet cannot hold a
-permit, cannot be cited, cannot lose a licence — so it must not take an
-action whose consequence it cannot carry. Authority is enforced per
-tool call at three levels (observe / recommend / act); the operator can
-promote, demote, or reinstate any agent live; and nothing irreversible
-executes without his readback-and-confirm. Visible restraint is the
-design, not a limitation of it.
 
-## Why the facility is de-identified
+The forecaster was backtested against **the EPA's entire public
+discharge record**, not a simulation:
 
-The dataset behind this project describes real towns and real,
-identifiable, mostly under-resourced public employees. Naming a
-specific facility's violations in a demo would be unfair to people who
-show up to hard jobs, and would imply conclusions a backtest cannot
-support. So: the backtest is **aggregate only** — 10,396 facilities,
-none named, no jurisdiction singled out (aggregate is safer *and*
-statistically stronger); the demo facility ("Cedar Ridge") is a
-representative composite — real permit structure and real limit values
-from the public record for small municipal plants, fictional name and
-geography, labeled as such on screen; and the repo is fully
-reproducible, so verifiability lives here while anonymity lives in the
-video. Nothing in this project states or implies that any specific
-community's water is unsafe. These facilities are permitted, sampled,
-and reported. The story is about capacity, not safety.
+> ### 53.9%
+> of the **18,338 permit exceedances that actually happened** would have
+> been flagged — a median of **51 days** before the monthly report
+> surfaced them.
+>
+> Across **10,396 real municipal facilities** and **6,030,868 real
+> reported discharge values** (2019-10 → 2025-09), held-out six-month
+> window, **enforceable limits only**. Precision 25.2% against a 3.6%
+> base rate — a **7× enrichment**.
+
+Every number is written by [`data/sql/03_finding.sql`](data/sql/03_finding.sql)
+and served live at [`/api/finding`](https://steward-fleet-649854119911.us-central1.run.app/api/finding).
+None was typed by hand. `make data && make backtest` re-derives all of
+them from the public record on your own machine.
+
+This is a research result computed by an agent fleet on public
+production data, reproducible by anyone who clones the repository.
+
+---
 
 ## Backtest methodology — and its limitations
+
 
 1. **Series** ([01_series.sql](data/sql/01_series.sql)): one series per
    facility × outfall × parameter × statistical base, monthly, POTWs
@@ -398,7 +311,120 @@ and reported. The story is about capacity, not safety.
    usually earlier) to the date the report actually reached the
    regulator (`VALUE_RECEIVED_DATE`).
 
+## Run it
+
+
+```bash
+# local, one command → console at http://localhost:8000/console/
+# (fleet + console on :8000, state primacy agency publisher on :8091)
+make install && make dev
+
+# the tests a review tool should run first — 41 policy tests, no cloud needed
+make test
+
+# replay a whole shift from the top (SPEED=fast|demo|real)
+make replay SPEED=fast
+
+# deploy: fleet → Vertex AI Agent Runtime (long-lived, agent identity)
+make deploy
+
+# deploy: everything → Cloud Run (fleet+console, primacy publisher, Gemma edge)
+make deploy-all
+
+# rebuild the data spine and the finding from the public record
+make data && make backtest
+```
+
+[![Run on Google Cloud](https://deploy.cloud.run/button.svg)](https://deploy.cloud.run?git_repo=https://github.com/gitabssi/Steward)
+
+Auth is Application Default Credentials / Workload Identity throughout.
+**No keys, tokens, or credentials exist anywhere in this repo or its
+history**; [.env.example](.env.example) documents every variable.
+
+**Verify the deployed fleet yourself** — this is a live Agent Runtime
+engine holding its own workload identity (not a shared service account):
+
+```bash
+TOKEN=$(gcloud auth print-access-token)
+BASE=https://us-central1-aiplatform.googleapis.com/v1/projects/steward-fleet-2026/locations/us-central1/reasoningEngines/6520690542165098496
+
+# the engine's own identity + exported methods
+curl -s -H "Authorization: Bearer $TOKEN" $BASE | jq '.spec.identityType, .spec.effectiveIdentity'
+
+# open a session on the live fleet
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  $BASE:query -d '{"class_method":"create_session","input":{"user_id":"judge"}}'
+```
+
+Or, with no credentials at all, read the running fleet's own audit
+ledger and its BigQuery-computed finding:
+
+```bash
+curl -s https://steward-fleet-649854119911.us-central1.run.app/api/finding
+curl -sN https://steward-fleet-649854119911.us-central1.run.app/api/events | head -20
+```
+
+---
+
+## Folder structure
+
+
+| Path | What it is |
+|---|---|
+| [app/agent.py](app/agent.py) | Root orchestrator (ADK). What the playground, A2A, and the Vertex console talk to |
+| [app/fleet/](app/fleet/) | The fleet: [authority.py](app/fleet/authority.py) (observe/recommend/act, enforced per tool call), [identity.py](app/fleet/identity.py) (per-facility scope; cross-facility reads denied), [supervisor.py](app/fleet/supervisor.py) (claim audit → quarantine → re-issue), [arbiter.py](app/fleet/arbiter.py) (agents that disagree), [guards.py](app/fleet/guards.py) (Model Armor at the document boundary), [registry.py](app/fleet/registry.py) (catalog cache + live A2A resolve), [memory.py](app/fleet/memory.py) (learned facts w/ observation counts), [events.py](app/fleet/events.py) (the audit ledger), [shift.py](app/fleet/shift.py) (the long-lived loop Agent Runtime keeps alive) |
+| [app/fleet/agents/workers.py](app/fleet/agents/workers.py) | The five station agents and the mounted specialist — personas, tools, grants |
+| [app/console_api.py](app/console_api.py) | SSE ledger stream, the operator's narrow write paths, Chirp voice out |
+| [console/](console/) | The operator's console (React/Vite): a cross-section of the plant, not a dashboard |
+| [fixtures/](fixtures/) | The honest simulation boundary: [replay.py](fixtures/replay.py) interpolates telemetry *between* real reported values; [seeds/](fixtures/seeds/) hold world facts only — never agent behaviour (that boundary has a test) |
+| [data/](data/) | The real-data spine: EPA pull/prepare/load scripts and the three backtest SQL files |
+| [edge/](edge/) | Self-hosted Gemma inside the OT boundary (its own Cloud Run service) |
+| [primacy/](primacy/) | The state primacy agency's A2A publisher — the second department, registered in Agent Registry |
+| [app/fleet/memory_bank.py](app/fleet/memory_bank.py) | Vertex AI Memory Bank behind one door: regional, scoped, and honest about its fallback |
+| [app/fleet/tracing.py](app/fleet/tracing.py) | The spans that make a ledger trace id resolve to a reasoning chain |
+| [deployment/](deployment/) | Terraform (single-project + CI/CD with Workload Identity Federation), generated by agents-cli |
+| [docs/operations.md](docs/operations.md) | Failure and recovery: quarantine, token runaway, endpoint fallback, partial failure |
+| [tests/unit/test_fleet.py](tests/unit/test_fleet.py) | The fences, tested |
+
+---
+
+## Separation of concerns — who may do what, and why
+
+
+| Agent | Station | Authority | May | May not |
+|---|---|---|---|---|
+| flow-warden | headworks | observe | read hydraulics, warn with numbers | touch anything |
+| aeration-keeper | aeration basin | **act** | move blower setpoints in scope | act while its action is under contention |
+| permit-sentinel | outfall | recommend | draft, pin the screen, query the public record | execute anything |
+| weather-scout | creek/sky | observe | forecast, hand off | touch anything |
+| notification-clerk | front office | recommend | draft handovers/notifications | send anything |
+| bypass-specialist | mounted | recommend | assess lawfulness, cite CFR | act, or read any other facility |
+| supervisor | — | — | audit claims, quarantine, re-issue | speak to the operator in workers' place |
+| operator | — | — | everything irreversible | be replaced |
+
+Enforcement is structural: the `AuthorityPlugin` checks every tool call
+against the grant, the `ScopedReader` checks facility scope inside data
+tools, and both allowances *and* denials are attributed ledger rows
+carrying Cloud Trace ids.
+
+## Failure tolerance
+
+
+A worker that **hallucinates**: every numeric claim must cite a source;
+the supervisor reads cited sensors itself; no source or a contradiction
+→ the claim is withheld, the worker quarantined live, the task
+re-issued — and the operator hears five words: *"That number never
+reached you."* A worker that **loops**: step budgets (24) and
+wall-clock ceilings (120 s) charged in the same loop that would spend
+the tokens; exhaustion is a quarantine, not a retry storm. A **model
+endpoint down**: deterministic fallback with a ledger row that says so —
+never silent. **Partial fleet failure**: contained per tick; the
+console degrades (`DEGRADED — last known state shown`, breathing
+frozen), it never blanks. Details with code pointers:
+[docs/operations.md](docs/operations.md).
+
 ## The edge, live — and what it cost to get there
+
 
 Gemma runs on the deployed service, on **CPU, no accelerator**. Check
 it yourself:
@@ -443,6 +469,7 @@ that fails open is not a boundary.
 
 ## Which screener ran, and why the ledger says so
 
+
 [app/fleet/guards.py](app/fleet/guards.py) calls **Model Armor**
 (`sanitize_user_prompt`) against a prompt-injection/jailbreak template,
 and every GUARD row in the ledger names the path that actually ran —
@@ -478,40 +505,8 @@ telemetry is **interpolated** — real plants have it; the public record
 does not. Monthly reported values, permit limits, and exceedances are
 real.
 
-## Separation of concerns — who may do what, and why
-
-| Agent | Station | Authority | May | May not |
-|---|---|---|---|---|
-| flow-warden | headworks | observe | read hydraulics, warn with numbers | touch anything |
-| aeration-keeper | aeration basin | **act** | move blower setpoints in scope | act while its action is under contention |
-| permit-sentinel | outfall | recommend | draft, pin the screen, query the public record | execute anything |
-| weather-scout | creek/sky | observe | forecast, hand off | touch anything |
-| notification-clerk | front office | recommend | draft handovers/notifications | send anything |
-| bypass-specialist | mounted | recommend | assess lawfulness, cite CFR | act, or read any other facility |
-| supervisor | — | — | audit claims, quarantine, re-issue | speak to the operator in workers' place |
-| operator | — | — | everything irreversible | be replaced |
-
-Enforcement is structural: the `AuthorityPlugin` checks every tool call
-against the grant, the `ScopedReader` checks facility scope inside data
-tools, and both allowances *and* denials are attributed ledger rows
-carrying Cloud Trace ids.
-
-## Failure tolerance — the questions judges asked, answered by name
-
-A worker that **hallucinates**: every numeric claim must cite a source;
-the supervisor reads cited sensors itself; no source or a contradiction
-→ the claim is withheld, the worker quarantined live, the task
-re-issued — and the operator hears five words: *"That number never
-reached you."* A worker that **loops**: step budgets (24) and
-wall-clock ceilings (120 s) charged in the same loop that would spend
-the tokens; exhaustion is a quarantine, not a retry storm. A **model
-endpoint down**: deterministic fallback with a ledger row that says so —
-never silent. **Partial fleet failure**: contained per tick; the
-console degrades (`DEGRADED — last known state shown`, breathing
-frozen), it never blanks. Details with code pointers:
-[docs/operations.md](docs/operations.md).
-
 ## Registry deviation, stated deliberately
+
 
 Platform guidance says resolve agents once at startup for latency.
 Steward caches at boot **and** resolves live on a miss, because an
@@ -520,7 +515,38 @@ wet-weather bypass is exactly such a role. Resolution latency is
 measured and shown; at the moment it matters it is evidence the
 registry does real work.
 
+## Why this fleet is deliberately not fully autonomous
+
+
+The operator carries the legal responsibility personally: his
+certification is on the line, not the software's. A fleet cannot hold a
+permit, cannot be cited, cannot lose a licence — so it must not take an
+action whose consequence it cannot carry. Authority is enforced per
+tool call at three levels (observe / recommend / act); the operator can
+promote, demote, or reinstate any agent live; and nothing irreversible
+executes without his readback-and-confirm. Visible restraint is the
+design, not a limitation of it.
+
+## Why the facility is de-identified
+
+
+The dataset behind this project describes real towns and real,
+identifiable, mostly under-resourced public employees. Naming a
+specific facility's violations in a demo would be unfair to people who
+show up to hard jobs, and would imply conclusions a backtest cannot
+support. So: the backtest is **aggregate only** — 10,396 facilities,
+none named, no jurisdiction singled out (aggregate is safer *and*
+statistically stronger); the demo facility ("Cedar Ridge") is a
+representative composite — real permit structure and real limit values
+from the public record for small municipal plants, fictional name and
+geography, labeled as such on screen; and the repo is fully
+reproducible, so verifiability lives here while anonymity lives in the
+video. Nothing in this project states or implies that any specific
+community's water is unsafe. These facilities are permitted, sampled,
+and reported. The story is about capacity, not safety.
+
 ## Insights hit while implementing
+
 
 - **`VALUE_RECEIVED_DATE` is the whole product, hiding in a public
   CSV.** The EPA record doesn't just say what was exceeded — it says
@@ -548,6 +574,7 @@ registry does real work.
 
 ## Things we're proud of that didn't fit in the video
 
+
 - The **single-use approval token**: minted only by the operator's
   confirmed decision, bound to one action fingerprint, burned on
   redemption — `TestApprovalVault` proves a replay fails.
@@ -558,28 +585,13 @@ registry does real work.
   where the forecast earns its keep nationally.
 - One Cloud Run URL is the whole product: `/console` for the operator,
   `/api` for the ledger, `/a2a` for other fleets, ADK's dev UI for
-  judges.
+  reviewers.
 - 66M rows of federal CSV → BigQuery on a laptop, streamed straight out
   of the zips, nothing unpacked to disk
   ([data/prepare_dmrs.py](data/prepare_dmrs.py)).
 
-## Google Cloud, load-bearing — where each piece lands
-
-*(The scannable version is [at the top](#the-platform-stack-and-how-to-check-each-claim). This is the detail: not a list of logos, but where each service's output actually shows up in the product.)*
-
-| Piece | Where it works |
-|---|---|
-| **Agent Runtime** | The fleet, deployed long-lived with `--agent-identity` (`make deploy`); the platform serves its A2A card |
-| **Agent Registry + A2A** | `agentregistry.googleapis.com` queried for discovery, bundled catalog as the named fallback. Both publishers registered: the fleet auto-registered on deploy, the primacy agency as an external `Service`. Version pinning refuses an incompatible mount |
-| **BigQuery** | The national NPDES corpus (66M reported values), the backtest, ADK's BigQuery agent-analytics plugin |
-| **Memory Bank** | The learned-facts store: written via `add_memory`, hydrated at boot ([app/fleet/memory_bank.py](app/fleet/memory_bank.py)). Local store is the fallback and the ledger names which is live |
-| **Model Armor** | Inbound document screen ([app/fleet/guards.py](app/fleet/guards.py)) — `sanitizeUserPrompt` against a jailbreak/prompt-injection template. See the honesty note below on which path the deployed demo actually runs |
-| **Cloud Trace / Logging** | Spans authored per job, task, audit and contention ([app/fleet/tracing.py](app/fleet/tracing.py)); a ledger row's trace id resolves to the reasoning that produced it |
-| **Firestore** | Live per-facility state and the persisted ledger |
-| **Cloud Run** | Fleet+console, the primacy publisher, and the Gemma edge — three services, three identities |
-| **Gemini 3.7 Flash** | Every worker's reasoning: proposals, contentions, assessments, handovers |
-
 ## Bonus contributions
+
 
 - **Gemma 4** — self-hosted in [edge/](edge/) (Ollama, weights baked
   into the container), reading raw SCADA telemetry and dictated round
@@ -604,6 +616,7 @@ Devpost submission.*
 ---
 
 ## Screenshots
+
 
 **One frame, and most of the argument.** A live shift with nothing
 staged:
@@ -698,47 +711,3 @@ protect what, and what it would take to stop having to choose.
 ![Capacity Assessment](docs/screenshots/s6-capacity.png)
 
 ---
-
-## What this project is actually claiming
-
-Three things, each checkable rather than asserted:
-
-**1. Agent fleets can operate on real public production data, not
-demos.** The backtest runs on the EPA's national compliance record —
-66M reported values, 84K facilities — and produces a number anyone can
-re-derive with `make data && make backtest`. That is a research result
-computed by an agent fleet, reproducible from a clean clone.
-
-**2. The interesting part of a multi-agent system is disagreement, not
-delegation.** Any orchestrator can fan work out. This one is built so
-that three agents reach *incompatible correct conclusions*, prices each
-path, and escalates rather than papering over it. Nobody else in this
-category has agents that argue.
-
-**3. Restraint is a feature, and it has to be enforced.** Authority is
-checked on every tool call. Irreversible actions need a single-use token
-that only a human's confirmed decision can mint. A worker that asserts
-an unsourced number is quarantined mid-shift and its task re-issued. The
-fleet's weekly output is a record of what it *could not* do. None of
-that is a prompt instruction — all of it is code with tests.
-
-And where reality is narrower than the ambition, this README says so:
-[which screener ran](#which-screener-ran-and-why-the-ledger-says-so),
-[what the edge does and does not do](#the-edge-live--and-what-it-cost-to-get-there),
-[the interpolated telemetry boundary](#backtest-methodology--and-its-limitations),
-and the Agent Gateway we deliberately did not deploy. A fallback nobody
-can see is indistinguishable from a claim, so every fence in this system
-names the path that actually ran.
-
----
-
-<div align="center">
-
-**The town downstream drinks what he sends.**
-
-Now one person is not watching alone — and the fleet knows exactly what
-it owes him: every irreversible decision, back in his hands.
-
-[Open the console →](https://steward-fleet-649854119911.us-central1.run.app/console/)
-
-</div>
