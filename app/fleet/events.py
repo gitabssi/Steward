@@ -88,6 +88,7 @@ class EventBus:
         self._replay: deque[LedgerEntry] = deque(maxlen=replay_size)
         self._firestore = None
         self._firestore_failed = False
+        self._write_failures = 0
 
     # -- publishing ---------------------------------------------------------
 
@@ -131,6 +132,7 @@ class EventBus:
     # console and belongs in a historian; what persists here is the
     # attributed, consequential acts an auditor would ask to see.
     _EPHEMERAL: ClassVar[frozenset[EventKind]] = frozenset({EventKind.TELEMETRY})
+    WRITE_FAILURE_LIMIT: ClassVar[int] = 5
 
     def _persist(self, entry: LedgerEntry) -> None:
         if self._firestore_failed or entry.kind in self._EPHEMERAL:
@@ -159,8 +161,26 @@ class EventBus:
             self._firestore.collection("ledger").document(entry.entry_id).set(
                 json.loads(entry.to_json())
             )
-        except Exception:
-            self._firestore_failed = True
+            self._write_failures = 0
+        except Exception as exc:
+            # A transient write error is not a reason to stop keeping the
+            # record for the rest of the process's life. Give up only after
+            # a run of failures, and say so on the way down — an audit
+            # ledger that quietly stopped persisting is worse than one that
+            # never started.
+            self._write_failures += 1
+            if self._write_failures >= self.WRITE_FAILURE_LIMIT:
+                self._firestore_failed = True
+                self._replay.append(
+                    LedgerEntry(
+                        EventKind.SYSTEM,
+                        "event-bus",
+                        f"firestore writes failed {self._write_failures} times — "
+                        "ledger is in-memory only from here",
+                        Outcome.INFO,
+                        {"error": str(exc)[:200]},
+                    )
+                )
 
 
 BUS = EventBus()

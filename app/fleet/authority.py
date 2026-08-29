@@ -78,8 +78,15 @@ class ApprovalVault:
         self._tokens: dict[str, tuple[str, float]] = {}
 
     def mint(self, action_fingerprint: str) -> str:
+        # Sweep on mint: an unredeemed token is a decision the operator
+        # walked away from, and those must not accumulate for the life of
+        # the process.
+        now = time.time()
+        self._tokens = {
+            t: v for t, v in self._tokens.items() if now - v[1] <= self.TTL_SECONDS
+        }
         token = secrets.token_urlsafe(24)
-        self._tokens[token] = (action_fingerprint, time.time())
+        self._tokens[token] = (action_fingerprint, now)
         return token
 
     def redeem(self, token: str, action_fingerprint: str) -> bool:

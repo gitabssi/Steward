@@ -27,7 +27,7 @@ from google.adk.apps import App
 from google.adk.runners import InMemoryRunner
 from google.genai import types
 
-from app.fleet.authority import AuthorityPlugin
+from app.fleet.authority import POLICY, AuthorityPlugin
 from app.fleet.events import BUS, EventKind, Outcome
 from app.fleet.supervisor import (
     WALL_CLOCK_CEILING_S,
@@ -35,6 +35,7 @@ from app.fleet.supervisor import (
     Supervisor,
     TaskEnvelope,
 )
+from app.fleet.tracing import TRACER, mark_failed
 
 
 @dataclass
@@ -74,6 +75,27 @@ class ReasoningPool:
         fallback_proposal: dict | None = None,
     ) -> Reasoned:
         envelope = TaskEnvelope(agent_name=agent.name, task=prompt[:80])
+        grant = POLICY.grants.get(agent.name)
+        with TRACER.start_as_current_span(f"steward.task {agent.name}") as task_span:
+            task_span.set_attribute("steward.agent.name", agent.name)
+            if grant is not None:
+                task_span.set_attribute("steward.agent.identity", grant.identity)
+                task_span.set_attribute("steward.agent.authority", grant.authority.name)
+                task_span.set_attribute("steward.facility", grant.facility)
+            task_span.set_attribute("steward.task", prompt[:80])
+            return await self._ask_traced(
+                agent, prompt, fallback_say, fallback_proposal, envelope, task_span
+            )
+
+    async def _ask_traced(
+        self,
+        agent: Agent,
+        prompt: str,
+        fallback_say: str,
+        fallback_proposal: dict | None,
+        envelope: TaskEnvelope,
+        task_span,
+    ) -> Reasoned:
         try:
             try:
                 raw_text = await self._budgeted(agent, prompt, envelope)
@@ -93,6 +115,8 @@ class ReasoningPool:
                 Outcome.INFO,
                 error=str(exc)[:200],
             )
+            task_span.set_attribute("steward.fallback", True)
+            mark_failed(task_span, "model unavailable — deterministic fallback")
             return Reasoned(
                 agent_name=agent.name,
                 say=fallback_say,
@@ -103,6 +127,24 @@ class ReasoningPool:
             )
 
         audited = True
+        with TRACER.start_as_current_span("steward.audit") as audit_span:
+            audit_span.set_attribute(
+                "steward.claims.count", len(parsed.get("claims", []))
+            )
+            audited = self._audit_claims(agent, parsed, audit_span)
+        task_span.set_attribute("steward.audited", audited)
+
+        return Reasoned(
+            agent_name=agent.name,
+            say=parsed.get("say", fallback_say) if audited else "",
+            proposal=parsed.get("proposal") if audited else None,
+            claims=parsed.get("claims", []),
+            audited=audited,
+            raw=parsed,
+        )
+
+    def _audit_claims(self, agent: Agent, parsed: dict, audit_span) -> bool:
+        """Every numeric claim, checked against the source it cited."""
         for claim in parsed.get("claims", []):
             ok = self.supervisor.audit(
                 Claim(
@@ -113,17 +155,11 @@ class ReasoningPool:
                 )
             )
             if not ok:
-                audited = False
-                break
-
-        return Reasoned(
-            agent_name=agent.name,
-            say=parsed.get("say", fallback_say) if audited else "",
-            proposal=parsed.get("proposal") if audited else None,
-            claims=parsed.get("claims", []),
-            audited=audited,
-            raw=parsed,
-        )
+                # A quarantine is a decision, not a crash — but it should
+                # be findable by filtering errored spans.
+                mark_failed(audit_span, f"claim withheld: {claim.get('parameter')}")
+                return False
+        return True
 
     async def _budgeted(self, agent: Agent, prompt: str, envelope: TaskEnvelope) -> str:
         """The wall-clock ceiling, actually enforced.

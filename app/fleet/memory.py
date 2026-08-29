@@ -19,12 +19,14 @@ active backend is recorded at boot — never silent.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from app.fleet import memory_bank
 from app.fleet.events import BUS, EventKind, Outcome
 
 
@@ -46,36 +48,50 @@ class FleetMemory:
         self._path = store_path or Path(
             os.environ.get("STEWARD_MEMORY_PATH", "/tmp/steward-memory.json")
         )
-        self._memory_bank = self._connect_memory_bank()
+        self.backend = "local-json"
+        self.hydrated = False
+        self._dirty: set[str] = set()
+        self._flush_lock = asyncio.Lock()
+        self._write_failures = 0
+        self._bank = self._connect_memory_bank()
         self._load()
 
     def _connect_memory_bank(self):
-        """Vertex AI Memory Bank via the Agent Engine session/memory service."""
-        name = os.environ.get("AGENT_ENGINE_MEMORY_BANK")  # projects/.../reasoningEngines/N
-        if not name:
+        """Vertex AI Memory Bank, when an engine can be resolved."""
+        target = memory_bank.resolve_engine()
+        if target is None:
+            self.backend = "local-json"
+            BUS.record(
+                EventKind.SYSTEM,
+                "fleet-memory",
+                "no Memory Bank configured — facts persist to the local store",
+                Outcome.INFO,
+                backend=self.backend,
+            )
             return None
         try:
-            from google.adk.memory import VertexAiMemoryBankService
-
-            service = VertexAiMemoryBankService(
-                project=os.environ.get("GOOGLE_CLOUD_PROJECT"),
-                location=os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1"),
-                agent_engine_id=name.rsplit("/", 1)[-1],
-            )
+            bank = memory_bank.MemoryBank(target)
+            self.backend = "memory-bank"
             BUS.record(
                 EventKind.SYSTEM,
                 "fleet-memory",
                 "backed by Vertex AI Memory Bank",
                 Outcome.INFO,
-                agent_engine=name,
+                backend=self.backend,
+                agent_engine=target.engine_id,
+                location=target.location,
+                resolved_from=target.source,
+                scope=f"{memory_bank.APP_NAME}/{memory_bank.USER_ID}",
             )
-            return service
+            return bank
         except Exception as exc:
+            self.backend = "local-json"
             BUS.record(
                 EventKind.SYSTEM,
                 "fleet-memory",
                 "Memory Bank unavailable — using local store (recorded, not silent)",
                 Outcome.INFO,
+                backend=self.backend,
                 error=str(exc)[:200],
             )
             return None
@@ -83,6 +99,12 @@ class FleetMemory:
     # -- learning -----------------------------------------------------------
 
     def observe(self, subject: str, statement: str, learned_by: str) -> LearnedFact:
+        """Record a fact. Deliberately synchronous and network-free.
+
+        This is called from the reasoning path and from sync contexts, so
+        it only ever touches memory and the local file; the Memory Bank
+        write is queued and drained by the shift loop's own dispatcher.
+        """
         key = f"{subject}::{statement}"
         fact = self._facts.get(key)
         if fact:
@@ -98,9 +120,101 @@ class FleetMemory:
             Outcome.INFO,
             subject=subject,
             observations=fact.observations,
+            backend=self.backend,
         )
+        self._dirty.add(key)
         self._save()
         return fact
+
+    # -- the managed backend, drained off the heartbeat ---------------------
+
+    def pending(self) -> bool:
+        return bool(self._dirty) and self._bank is not None
+
+    async def flush(self) -> None:
+        """Write queued facts to Memory Bank. Failures keep the fact in
+        the local store and say so once, rather than pretending."""
+        if self._bank is None:
+            self._dirty.clear()
+            return
+        async with self._flush_lock:
+            queued, self._dirty = self._dirty, set()
+            failed: set[str] = set()
+            for key in queued:
+                fact = self._facts.get(key)
+                if fact is None:
+                    continue
+                try:
+                    await self._bank.write(fact)
+                except Exception as exc:
+                    failed.add(key)
+                    self._write_failures += 1
+                    if self._write_failures == 1:
+                        BUS.record(
+                            EventKind.SYSTEM,
+                            "fleet-memory",
+                            "memory bank write failed — the local store keeps the fact",
+                            Outcome.INFO,
+                            error=str(exc)[:200],
+                        )
+            self._dirty |= failed
+            if failed and self._write_failures >= 3:
+                self.backend = "local-json (degraded)"
+            elif not failed:
+                self._write_failures = 0
+
+    async def hydrate(self) -> None:
+        """Load what previous shifts learned. This is the cross-session
+        persistence claim, and it is one ledger row."""
+        if self._bank is None:
+            return
+        remote = await self._bank.read_all()
+        local_only = len(self._facts)
+        merged = 0
+        for row in remote:
+            key = f"{row['subject']}::{row['statement']}"
+            existing = self._facts.get(key)
+            if existing is None:
+                self._facts[key] = LearnedFact(
+                    subject=row["subject"],
+                    statement=row["statement"],
+                    observations=row["observations"],
+                    first_seen=row["first_seen"] or time.time(),
+                    learned_by=row["learned_by"],
+                )
+                merged += 1
+            else:
+                # Neither side is authoritative; the higher count is.
+                existing.observations = max(
+                    existing.observations, row["observations"]
+                )
+        self.hydrated = True
+        self._save()
+        BUS.record(
+            EventKind.MEMORY,
+            "fleet-memory",
+            f"hydrated {merged} facts from Vertex AI Memory Bank",
+            Outcome.INFO,
+            backend=self.backend,
+            scope=f"{memory_bank.APP_NAME}/{memory_bank.USER_ID}",
+            from_bank=len(remote),
+            already_local=local_only,
+        )
+
+    async def recall(self, query: str, by: str) -> list[str]:
+        """Semantic recall from the bank, cited on the record."""
+        if self._bank is None:
+            return []
+        found = await self._bank.recall(query)
+        if found:
+            BUS.record(
+                EventKind.MEMORY,
+                by,
+                f"recalled {len(found)} facts from Memory Bank",
+                Outcome.INFO,
+                query=query[:80],
+            )
+        return found
 
     def cite(self, statement_contains: str, by: str, decision: str) -> LearnedFact | None:
         """Find a fact and put the citation on the record."""

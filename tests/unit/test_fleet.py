@@ -279,3 +279,94 @@ class TestContract:
         # inventing one.
         with pytest.raises((ValueError, json.JSONDecodeError)):
             _parse_contract("no json here")
+
+
+class TestMemoryBackend:
+    """The memory store must be honest about which backend it has."""
+
+    def _store(self, tmp_path):
+        from app.fleet.memory import FleetMemory
+
+        return FleetMemory(store_path=tmp_path / "facts.json")
+
+    def test_defaults_to_local_and_says_so(self, tmp_path, monkeypatch) -> None:
+        monkeypatch.delenv("AGENT_ENGINE_MEMORY_BANK", raising=False)
+        monkeypatch.delenv("GOOGLE_CLOUD_AGENT_ENGINE_ID", raising=False)
+        store = self._store(tmp_path)
+        assert store.backend == "local-json"
+        assert not store.pending()  # nothing to flush without a bank
+
+    def test_observe_is_synchronous_and_queues(self, tmp_path) -> None:
+        store = self._store(tmp_path)
+        fact = store.observe("operator", "chooses haul over bypass", "arbiter@t")
+        assert fact.observations == 1
+        # Re-observing counts rather than duplicating.
+        assert store.observe("operator", "chooses haul over bypass", "arbiter@t").observations == 2
+        assert len(store.facts()) == 1
+
+    def test_flush_without_a_bank_clears_and_never_raises(self, tmp_path) -> None:
+        import asyncio
+
+        store = self._store(tmp_path)
+        store.observe("facility", "blower 2 underperforms below 8C", "aeration@t")
+        asyncio.run(store.flush())
+        assert not store.pending()
+
+    def test_facts_survive_a_restart_via_the_local_store(self, tmp_path) -> None:
+        first = self._store(tmp_path)
+        first.observe("facility", "lab turnaround slips on Fridays", "clerk@t")
+        second = self._store(tmp_path)
+        assert any("Fridays" in f["statement"] for f in second.facts())
+
+
+class TestMemoryBankResolution:
+    """Which engine the bank binds to, and in which region."""
+
+    def test_full_resource_path_yields_id_and_region(self, monkeypatch) -> None:
+        from app.fleet import memory_bank
+
+        monkeypatch.setenv(
+            "AGENT_ENGINE_MEMORY_BANK",
+            "projects/p/locations/europe-west4/reasoningEngines/123",
+        )
+        target = memory_bank.resolve_engine()
+        assert target.engine_id == "123"
+        assert target.location == "europe-west4"
+
+    def test_never_inherits_the_global_gemini_region(self, monkeypatch) -> None:
+        from app.fleet import memory_bank
+
+        # GOOGLE_CLOUD_LOCATION is 'global' on every deploy path because
+        # that is where Gemini 3.x serves. Memory Bank is regional; if it
+        # ever picked this up, every call would 404.
+        monkeypatch.setenv("GOOGLE_CLOUD_LOCATION", "global")
+        monkeypatch.delenv("STEWARD_MEMORY_BANK_LOCATION", raising=False)
+        monkeypatch.delenv("AGENT_ENGINE_MEMORY_BANK", raising=False)
+        monkeypatch.setenv("GOOGLE_CLOUD_AGENT_ENGINE_ID", "456")
+        assert memory_bank.resolve_engine().location != "global"
+
+    def test_unset_means_no_bank(self, monkeypatch) -> None:
+        from app.fleet import memory_bank
+
+        monkeypatch.delenv("AGENT_ENGINE_MEMORY_BANK", raising=False)
+        monkeypatch.delenv("GOOGLE_CLOUD_AGENT_ENGINE_ID", raising=False)
+        assert memory_bank.resolve_engine() is None
+
+
+class TestTracing:
+    """Ledger rows must carry a real trace id when a provider exists."""
+
+    def test_spans_share_one_trace_and_degrade_without_a_provider(self) -> None:
+        from opentelemetry import trace
+        from opentelemetry.sdk.trace import TracerProvider
+
+        from app.fleet.events import _current_trace_id
+        from app.fleet.tracing import TRACER
+
+        trace.set_tracer_provider(TracerProvider())
+        with TRACER.start_as_current_span("steward.job contention"):
+            outer = _current_trace_id()
+            with TRACER.start_as_current_span("steward.audit"):
+                assert _current_trace_id() == outer  # one reasoning chain
+        assert not outer.startswith("untraced")
+        assert _current_trace_id().startswith("untraced")  # outside any span

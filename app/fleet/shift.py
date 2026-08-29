@@ -36,12 +36,13 @@ from app.fleet import tools
 from app.fleet.agents import workers
 from app.fleet.arbiter import ARBITER, Proposal
 from app.fleet.authority import POLICY
-from app.fleet.events import BUS, EventKind, Outcome
+from app.fleet.events import BUS, EventKind, Outcome, _current_trace_id
 from app.fleet.guards import screen
 from app.fleet.llm import ReasoningPool
 from app.fleet.memory import MEMORY
 from app.fleet.registry import Registry
 from app.fleet.supervisor import Supervisor
+from app.fleet.tracing import TRACER
 from fixtures.replay import World
 
 TICK_SECONDS = 2.0
@@ -57,6 +58,10 @@ class PendingDecision:
     window_minutes: int
     opened_at: float = field(default_factory=time.time)
     resolved: str | None = None
+    # The trace of the argument that raised this question. The answer
+    # arrives minutes later in a trace of its own; this is the thread
+    # back to the reasoning.
+    origin_trace_id: str = ""
 
 
 @dataclass
@@ -112,6 +117,19 @@ class ShiftLoop:
             Outcome.INFO,
             facility=self.facility_id,
         )
+        # What previous shifts learned, before this one reasons about
+        # anything. Nothing is ticking yet, so a bounded wait here costs
+        # no telemetry and makes the recall deterministic.
+        try:
+            await asyncio.wait_for(MEMORY.hydrate(), timeout=15)
+        except Exception as exc:
+            BUS.record(
+                EventKind.SYSTEM,
+                "fleet-memory",
+                "memory bank hydrate failed — starting from the local store",
+                Outcome.INFO,
+                error=str(exc)[:200],
+            )
         while True:
             try:
                 await self.tick()
@@ -147,6 +165,8 @@ class ShiftLoop:
         )
         for event in self.world.due_events():
             self._dispatch(self.handle(event), f"event:{event['kind']}")
+        if MEMORY.pending():
+            self._dispatch(MEMORY.flush(), "memory-flush")
         await self.watch_conditions(telemetry)
 
     def _dispatch(self, coro, label: str) -> None:
@@ -155,16 +175,23 @@ class ShiftLoop:
         unretrieved-task warning nobody reads."""
 
         async def guarded() -> None:
-            try:
-                await coro
-            except Exception as exc:
-                BUS.record(
-                    EventKind.SYSTEM,
-                    "fleet-orchestrator",
-                    f"{label} failed and was contained",
-                    Outcome.INFO,
-                    error=str(exc)[:300],
-                )
+            # The span opens inside the task, not around create_task: a
+            # span started outside would already have ended by the time
+            # the coroutine actually ran, and every child would be orphaned.
+            with TRACER.start_as_current_span(f"steward.job {label}") as job:
+                job.set_attribute("steward.facility", self.facility_id)
+                job.set_attribute("steward.shift.minutes", round(self.world.minutes, 1))
+                try:
+                    await coro
+                except Exception as exc:
+                    job.record_exception(exc)
+                    BUS.record(
+                        EventKind.SYSTEM,
+                        "fleet-orchestrator",
+                        f"{label} failed and was contained",
+                        Outcome.INFO,
+                        error=str(exc)[:300],
+                    )
 
         task = asyncio.create_task(guarded())
         self._jobs.add(task)
@@ -277,8 +304,19 @@ class ShiftLoop:
             )
 
     async def run_contention(self, telemetry: dict) -> None:
-        """The coupling beat: one proposed action, two counter-consequences."""
+        """The coupling beat: one proposed action, two counter-consequences.
+
+        The span wraps the whole round rather than living in arbiter.py,
+        because open/submit/resolve are separate calls with awaits between
+        them — only the caller spans the argument end to end.
+        """
+        with TRACER.start_as_current_span("steward.contention") as round_span:
+            round_span.set_attribute("steward.facility", self.facility_id)
+            await self._run_contention(telemetry, round_span)
+
+    async def _run_contention(self, telemetry: dict, round_span) -> None:
         contention = ARBITER.open_contention("aeration response to infiltration surge")
+        round_span.set_attribute("steward.contention.id", contention.contention_id)
 
         proposer = await self.pool.ask(
             workers.aeration_keeper,
@@ -373,6 +411,7 @@ class ShiftLoop:
                 subject="aeration response — every fix costs something somewhere else",
                 options=resolution["options"],
                 window_minutes=min(o["window_minutes"] for o in resolution["options"]),
+                origin_trace_id=_current_trace_id(),
             )
             self.state.pending[decision.decision_id] = decision
 
@@ -458,6 +497,7 @@ class ShiftLoop:
             subject=f"one tanker, {len(options)} obligations — whatever you don't pick, the cost is recorded",
             options=options,
             window_minutes=90,
+            origin_trace_id=_current_trace_id(),
         )
         self.state.pending[decision.decision_id] = decision
         BUS.record(
@@ -478,6 +518,19 @@ class ShiftLoop:
             return {"error": "no such open decision"}
         if chosen_action not in {o["action"] for o in decision.options}:
             return {"error": "chosen action is not among the offered options"}
+        with TRACER.start_as_current_span("steward.decision") as decision_span:
+            decision_span.set_attribute("steward.decision.id", decision_id)
+            decision_span.set_attribute("steward.decision.action", chosen_action)
+            decision_span.set_attribute("steward.facility", self.facility_id)
+            if decision.origin_trace_id:
+                decision_span.set_attribute(
+                    "steward.contention.trace_id", decision.origin_trace_id
+                )
+            return await self._decide(decision, decision_id, chosen_action)
+
+    async def _decide(
+        self, decision, decision_id: str, chosen_action: str
+    ) -> dict:
         decision.resolved = chosen_action
 
         if chosen_action.startswith("tanker →"):
@@ -535,6 +588,7 @@ class ShiftLoop:
             fallback_say=f"{detail['cover']} is covering. She'll have everything from tonight, and why.",
         )
         self._speak("notification-clerk@cedar-ridge", handover)
+        await MEMORY.flush()
         await self.capacity_assessment()
 
     async def capacity_assessment(self) -> None:

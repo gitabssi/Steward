@@ -23,11 +23,20 @@ AGENCY = "State Primacy Agency — Water Compliance Division"
 app = FastAPI(title="primacy-agency-publisher", description=__doc__)
 
 
+# The version a consumer pins against. Bumping this is how the agency
+# would ship a revised reading of the regulation; the fleet records
+# which version it mounted and whether that satisfied its pin.
+AGENT_VERSION = os.environ.get("AGENT_VERSION", "1.2.0")
+
+
 @app.get("/.well-known/agent-card.json")
 def agent_card() -> dict:
+    # Without PUBLIC_URL the card advertises localhost, which no registry
+    # and no other fleet can reach. Deploy sets it (see `make deploy-all`).
     base = os.environ.get("PUBLIC_URL", "http://localhost:8091")
     return {
         "protocolVersion": "1.0",
+        "version": AGENT_VERSION,
         "name": "wet-weather-bypass-specialist",
         "description": (
             "Specialist in 40 CFR 122.41(m): when a wet-weather bypass is "
