@@ -1,48 +1,74 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-/** Ask the Agent Registry who publishes a capability, and mount them.
+/** Who is available, and who is on the roster.
  *
- *  The fleet does this by itself when a condition surfaces a role nobody
- *  catalogued. This is the same call, put in the operator's hands: type
- *  a capability, see who publishes it and at what version, and mount it
- *  — or watch the mount refused because the published version is not one
- *  this fleet accepts.
+ *  Searching by exact role only helps someone who already knows what to
+ *  type, and an operator does not. So this lists everything the project
+ *  knows about — the fleet's own catalog and whatever the managed Agent
+ *  Registry holds — and lets him mount or release from the same place.
  */
 
-interface Found {
-  found: boolean;
-  name?: string;
+interface Row {
+  name: string;
   publisher?: string;
-  department?: string;
   description?: string;
   version?: string;
   pinned?: string;
   satisfies_pin?: boolean;
-  source?: string;
-  skills?: string[];
   mounted?: boolean;
+  standing?: boolean;
+  origin?: string;
+  source?: string;
+  department?: string;
 }
 
 export function RegistryPanel() {
-  const [role, setRole] = useState("wet-weather-bypass-specialist");
-  const [res, setRes] = useState<Found | null>(null);
+  const [q, setQ] = useState("");
+  const [rows, setRows] = useState<Row[]>([]);
+  const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const call = async (path: string) => {
+  const list = async (reveal = true) => {
     setBusy(true);
     try {
-      const r = await fetch(`/api/registry/${path}`, {
+      const b = await (await fetch("/api/registry/list")).json();
+      setRows(b.agents ?? []);
+      setNote(b.registry_error ? `managed registry unreachable — showing the bundled catalog` : "");
+      if (reveal) setOpen(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Loaded at boot so the count is honest before anything is clicked, but
+  // left closed: the roster is what the operator reads every day, and the
+  // catalogue only matters on the day he needs someone new.
+  useEffect(() => { void list(false); }, []);
+
+  const act = async (role: string, what: "mount" | "unmount") => {
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/registry/${what}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ role }),
       });
       const b = await r.json();
-      if (path === "search") setRes(b);
-      else setRes((p) => (p ? { ...p, mounted: !!b.mounted } : p));
+      if (what === "mount" && b.mounted === false) setNote(b.reason ?? "");
+      await list();
     } finally {
       setBusy(false);
     }
   };
+
+  const shown = q.trim()
+    ? rows.filter((r) =>
+        `${r.name} ${r.publisher ?? ""} ${r.description ?? ""}`
+          .toLowerCase()
+          .includes(q.trim().toLowerCase()),
+      )
+    : rows;
 
   return (
     <div className="registry-panel">
@@ -50,48 +76,64 @@ export function RegistryPanel() {
         <span className="label">Agent Registry</span>
         <input
           className="mono"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          placeholder="capability, e.g. wet-weather-bypass-specialist"
-          onKeyDown={(e) => e.key === "Enter" && call("search")}
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="search every agent this project can reach — or click to see all of them"
+          onFocus={() => setOpen(true)}
         />
-        <button className="ghost" disabled={busy} onClick={() => call("search")}>
-          {busy ? "…" : "search"}
+        <button className="ghost" disabled={busy} onClick={() => void list()}>
+          {busy ? "…" : "refresh"}
         </button>
+        <button className="ghost" onClick={() => setOpen((o) => !o)}>
+          {open ? "hide" : `show all (${rows.length})`}
+        </button>
+        {note && <span className="reg-note">{note}</span>}
       </div>
-      {res && (
-        <div className={`reg-result ${res.found ? "" : "empty"}`}>
-          {!res.found ? (
-            <span className="reg-none">no publisher in this project offers that capability</span>
-          ) : (
-            <>
-              <div className="reg-line">
-                <b>{res.name}</b>
-                <span className="reg-ver mono">v{res.version}</span>
-                {res.pinned && (
-                  <span className={`reg-pin mono ${res.satisfies_pin ? "ok" : "bad"}`}>
-                    pinned {res.pinned} {res.satisfies_pin ? "✓" : "✗"}
+
+      {open && (
+        <div className="reg-list">
+          {shown.map((r) => (
+            <div className={`reg-item ${r.mounted ? "on" : ""}`} key={r.name}>
+              <div className="reg-item-main">
+                <span className="reg-item-name mono">{r.name}</span>
+                {r.version && <span className="reg-ver mono">v{r.version}</span>}
+                {r.pinned && (
+                  <span className={`reg-pin mono ${r.satisfies_pin ? "ok" : "bad"}`}>
+                    pinned {r.pinned} {r.satisfies_pin ? "✓" : "✗"}
                   </span>
                 )}
-                <span className="reg-src mono">via {res.source}</span>
+                <span className="reg-origin mono">{r.origin ?? r.source}</span>
               </div>
-              <div className="reg-pub">{res.publisher}</div>
-              {res.description && <div className="reg-desc">{res.description}</div>}
-              <div className="reg-actions">
-                {res.mounted ? (
-                  <span className="reg-mounted">mounted · recommend authority, this facility only</span>
+              <div className="reg-item-pub">
+                {r.publisher && r.publisher !== r.name ? r.publisher : (r.description ?? "")}
+              </div>
+              <div className="reg-item-act">
+                {r.mounted ? (
+                  <>
+                    <span className="reg-on">on the roster</span>
+                    {/* A visiting specialist can be sent home; the standing
+                        crew is the plant's own, and is not dismissed from
+                        a search box. */}
+                    {!r.standing && (
+                      <button className="ghost" disabled={busy} onClick={() => act(r.name, "unmount")}>
+                        release
+                      </button>
+                    )}
+                    {r.standing && <span className="reg-standing">standing crew</span>}
+                  </>
                 ) : (
                   <button
                     className="ghost"
-                    disabled={busy || res.satisfies_pin === false}
-                    onClick={() => call("mount")}
+                    disabled={busy || r.satisfies_pin === false}
+                    onClick={() => act(r.name, "mount")}
                   >
-                    {res.satisfies_pin === false ? "refused by version pin" : "mount"}
+                    {r.satisfies_pin === false ? "refused by version pin" : "mount"}
                   </button>
                 )}
               </div>
-            </>
-          )}
+            </div>
+          ))}
+          {shown.length === 0 && <div className="reg-none">no match in this list</div>}
         </div>
       )}
     </div>

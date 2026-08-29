@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { PendingDecision } from "./types";
+import type { LearnedFact, PendingDecision } from "./types";
 import { decide } from "./useFleet";
 
 /** The bottom band does one of two jobs.
@@ -35,10 +35,19 @@ export function Instruments({
   pending,
   selected,
   onClear,
+  mode,
+  facts = [],
+  memoryBackend = "",
 }: {
   pending: PendingDecision[];
   selected: PendingDecision | null;
   onClear: () => void;
+  /** "requests" sits above the plant; "instruments" below it. Splitting
+   *  them means the fleet's question is never competing for the same
+   *  band as the telemetry it is asking about. */
+  mode: "requests" | "instruments";
+  facts?: LearnedFact[];
+  memoryBackend?: string;
 }) {
   const [edge, setEdge] = useState<Edge | null>(null);
   const [params, setParams] = useState<ParamRow[]>([]);
@@ -57,6 +66,7 @@ export function Instruments({
   }, []);
 
   const open = selected ?? pending.find((d) => !d.resolved) ?? null;
+  if (mode === "requests" && !open) return null;
 
   if (open) {
     return (
@@ -107,6 +117,29 @@ export function Instruments({
 
   return (
     <div className="region instruments">
+      <div className="inst">
+        <div className="inst-title">
+          <span className="label">Memory Bank · Vertex AI</span>
+          <span className={`dot ${memoryBackend.startsWith("memory-bank") ? "up" : "down"}`} />
+          <span className="inst-sub mono">{memoryBackend || "…"}</span>
+        </div>
+        <div className="inst-body">
+          <span className="inst-sub">
+            {facts.length} fact{facts.length === 1 ? "" : "s"} written by the fleet and
+            reloaded at boot — none of this existed on day one
+          </span>
+          {facts.slice(0, 3).map((f) => (
+            <div className="mb-fact" key={f.statement}>
+              {f.statement}
+              <span className="mono mb-obs"> · {f.observations}×</span>
+            </div>
+          ))}
+          {facts.length === 0 && (
+            <span className="inst-sub">nothing learned yet this shift</span>
+          )}
+        </div>
+      </div>
+
       <div className="inst">
         <div className="inst-title">
           <span className="label">OT boundary · Gemma 4</span>

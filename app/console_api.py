@@ -262,6 +262,83 @@ async def registry_search(req: RegistrySearch) -> dict:
     }
 
 
+@router.get("/registry/list")
+async def registry_list() -> dict:
+    """Everything this project knows about — the fleet's own catalog and
+    whatever the managed registry holds.
+
+    An operator does not know the name of every capability that exists,
+    so browsing has to be possible; searching by exact role only helps
+    someone who already knows what to type.
+    """
+    _ensure_shift()
+    if shift.LOOP is None:
+        return {"agents": []}
+    reg = shift.LOOP.registry
+    # The standing crew is already on shift. Offering to "mount" an agent
+    # the operator can see working two rows below would be a lie about
+    # what the button does, so they are marked as the roster they are.
+    on_shift = {g["identity"].split("@")[0] for g in describe_scopes()}
+    out = {}
+    for e in reg.roster():
+        standing = e["name"] in on_shift and e["name"] not in reg._mounted
+        out[e["name"]] = {
+            **e,
+            "origin": "fleet catalog",
+            "mounted": e["mounted"] or standing,
+            "standing": standing,
+        }
+
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    if project and os.environ.get("AGENT_REGISTRY", "on") != "off":
+        try:
+            import urllib.request
+
+            import google.auth
+            import google.auth.transport.requests
+
+            creds, _ = google.auth.default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            creds.refresh(google.auth.transport.requests.Request())
+            loc = os.environ.get("AGENT_REGISTRY_LOCATION", "us-central1")
+            base = f"https://agentregistry.googleapis.com/v1/projects/{project}/locations/{loc}"
+            for kind in ("services", "agents"):
+                req = urllib.request.Request(
+                    f"{base}/{kind}",
+                    headers={
+                        "Authorization": f"Bearer {creds.token}",
+                        "x-goog-user-project": project,
+                    },
+                )
+                with urllib.request.urlopen(req, timeout=8) as r:
+                    body = json.load(r)
+                for item in body.get(kind, []):
+                    card = (item.get("agentSpec") or {}).get("content") or {}
+                    skills = card.get("skills") or []
+                    name = card.get("name") or item.get("displayName", "")
+                    if not name:
+                        continue
+                    out.setdefault(
+                        name,
+                        {
+                            "name": name,
+                            "publisher": (card.get("provider") or {}).get(
+                                "organization", item.get("displayName", "")
+                            ),
+                            "description": card.get("description")
+                            or item.get("description", ""),
+                            "version": card.get("version", ""),
+                            "mounted": False,
+                            "origin": "Agent Registry",
+                            "skills": [x.get("id", "") for x in skills],
+                        },
+                    )
+        except Exception as exc:
+            return {"agents": list(out.values()), "registry_error": str(exc)[:140]}
+    return {"agents": list(out.values())}
+
+
 class RegistryMount(BaseModel):
     role: str
 
@@ -281,6 +358,47 @@ async def registry_mount(req: RegistryMount) -> dict:
         shift.LOOP.bypass_specialist = workers.make_bypass_specialist()
     return {"mounted": True, "name": entry.name, "version": entry.version,
             "publisher": entry.publisher, "source": entry.source}
+
+
+@router.post("/registry/unmount")
+async def registry_unmount(req: RegistryMount) -> dict:
+    """Send a mounted specialist home.
+
+    A visiting expert should not stay on the roster after the event that
+    called for it; releasing one is the operator's call and lands on the
+    record like any other.
+    """
+    _ensure_shift()
+    if shift.LOOP is None:
+        return {"error": "shift loop not started"}
+    role = req.role.strip()
+    reg = shift.LOOP.registry
+    # The roster knows the agent by its identity's local part
+    # ("bypass-specialist"); the registry knows it by its published role
+    # ("wet-weather-bypass-specialist"). Release has to work from either,
+    # because both are on screen.
+    if role not in reg._mounted:
+        role = next(
+            (k for k in reg._mounted if k.endswith(role) or role.endswith(k)),
+            role,
+        )
+    entry = reg._mounted.pop(role, None)
+    if entry is None:
+        return {"unmounted": False, "reason": "not mounted"}
+    name = role.replace("-", "_")
+    POLICY.grants.pop(name, None)
+    POLICY.grants.pop("bypass_specialist", None)
+    if "bypass" in role:
+        shift.LOOP.bypass_specialist = None
+    BUS.record(
+        EventKind.REGISTRY,
+        "agent-registry",
+        f"released {role} v{entry.version} — the event it was mounted for is over",
+        Outcome.INFO,
+        publisher=entry.publisher,
+        released_by="operator",
+    )
+    return {"unmounted": True, "name": role}
 
 
 @router.get("/edge")

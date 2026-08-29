@@ -1,4 +1,4 @@
-import type { ShiftState } from "./types";
+import type { LearnedFact, ShiftState } from "./types";
 import type { Runtime } from "./useFleet";
 
 function uptime(seconds: number): string {
@@ -12,6 +12,8 @@ export function TopBar({
   state,
   runtime,
   live,
+  facts,
+  memoryBackend,
   voice,
   speaking,
   onToggleVoice,
@@ -21,6 +23,11 @@ export function TopBar({
   state: ShiftState | null;
   runtime: Runtime | null;
   live: boolean;
+  /** Surfaced here rather than only in the panel below: what the fleet
+   *  remembers between shifts is the difference between a crew and a
+   *  script, and it should not require scrolling to see. */
+  facts: LearnedFact[];
+  memoryBackend: string;
   voice: boolean;
   speaking: boolean;
   onToggleVoice: () => void;
@@ -54,6 +61,11 @@ export function TopBar({
           {runtime?.identity_type === "AGENT_IDENTITY" && (
             <span className="label"> · own identity</span>
           )}
+        </div>
+        <div title={memoryBackend ? `backend: ${memoryBackend}` : "memory backend unknown"}>
+          <span className="label">Memory Bank </span>
+          <span className="v">{facts.length}</span>
+          <span className="label"> facts carried</span>
         </div>
         <div>
           <span className="label">Time returned this week </span>

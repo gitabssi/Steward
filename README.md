@@ -650,6 +650,18 @@ the marker that explains why any of it matters: a municipal intake,
 
 ![Calm](docs/screenshots/s1-calm.png)
 
+**Hiring.** The operator does not know the name of every capability that
+exists, so the registry browses rather than interrogates: one click
+lists every agent this project can reach — the fleet's own catalogue and
+whatever the managed **Agent Registry** holds, each with its published
+version. The standing crew is marked as crew. A visitor can be mounted,
+and released again when the event that called for it is over. The
+wet-weather specialist arrives at `v1.2.0` against a consumer pin of
+`^1.0`; the console says so, and the mount is refused rather than
+silently resolved.
+
+![Agent Registry](docs/screenshots/s2-registry.png)
+
 **The coupling.** An infiltration surge; dissolved oxygen falls; the
 aeration keeper proposes raising the blowers and the flow warden answers
 with what that costs downstream. Neither is wrong, so the arbiter
@@ -686,6 +698,13 @@ Nothing about that outcome is scripted. The fault injected is a stale
 read; whether anyone catches it is decided at runtime.
 
 ![Quarantine](docs/screenshots/s3-quarantine.png)
+
+Click the held card and the console answers the two questions a
+quarantine actually raises — *why*, in the supervisor's own words with
+both numbers quoted, and *what now*. The remedy is the operator's:
+reinstating the claim is an explicit act, worded as one.
+
+![The held agent](docs/screenshots/s3b-agent-held.png)
 
 **The Control Centre.** Every agent inspectable: identity, scope,
 authority as a live control the operator can change, the registry with

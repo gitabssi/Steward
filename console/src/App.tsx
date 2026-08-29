@@ -36,6 +36,8 @@ export default function App() {
           state={state}
           runtime={runtime}
           live={live}
+          facts={facts}
+          memoryBackend={memoryBackend}
           voice={voice}
           speaking={speaking}
           onToggleVoice={() => setVoice((v) => !v)}
@@ -46,30 +48,55 @@ export default function App() {
               : undefined
           }
         />
-        <FleetStrip
-          roster={roster}
-          entries={entries}
-          pending={state?.pending ?? []}
-          onOpenRequest={setOpenRequest}
-          onOpenAgent={setOpenAgent}
-        />
-        <div className="region plant">
-          <PlantSection state={state} entries={entries} live={live} />
-          <SystemLine entries={entries} voice={voice} onSpeaking={setSpeaking} />
+
+        <div className="main">
+          {/* Who is available comes before who is on shift: an operator
+              picks the crew, so the roster reads as a consequence of the
+              registry rather than a fixed list. */}
+          <RegistryPanel />
+
+          <FleetStrip
+            roster={roster}
+            entries={entries}
+            pending={state?.pending ?? []}
+            onOpenRequest={setOpenRequest}
+            onOpenAgent={setOpenAgent}
+          />
+
+          {/* What the fleet wants sits directly above the plant it is
+              talking about, not at the far bottom of the screen. */}
+          <Instruments
+            pending={state?.pending ?? []}
+            selected={openRequest}
+            onClear={() => setOpenRequest(null)}
+            mode="requests"
+          />
+
+          <PermitLines state={state} />
+
+          <div className="region plant">
+            <PlantSection state={state} entries={entries} live={live} />
+            <SystemLine entries={entries} voice={voice} onSpeaking={setSpeaking} />
+          </div>
+
+          <Defences entries={entries} finding={finding} />
+
+          <Instruments
+            pending={[]}
+            selected={null}
+            onClear={() => {}}
+            mode="instruments"
+            facts={facts}
+            memoryBackend={memoryBackend}
+          />
+
+          <div className="honesty">
+            Representative facility. Real EPA permit structure and limits. Live agents, live
+            models, live Google Cloud.
+          </div>
         </div>
-        <PermitLines state={state} />
-        <RegistryPanel />
-        <Defences entries={entries} finding={finding} />
-        <Instruments
-          pending={state?.pending ?? []}
-          selected={openRequest}
-          onClear={() => setOpenRequest(null)}
-        />
+
         <Ledger entries={entries} />
-        <div className="honesty">
-          Representative facility. Real EPA permit structure and limits. Live agents, live
-          models, live Google Cloud.
-        </div>
       </div>
 
       <AgentDetail

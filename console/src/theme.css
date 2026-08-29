@@ -28,7 +28,7 @@ html,
 body,
 #root {
   height: 100%;
-  overflow: hidden; /* one screen. no scrolling. ever. */
+  overflow: hidden;
   background: var(--ground);
   color: var(--ink);
   font-family: var(--sans);
@@ -39,19 +39,28 @@ body,
   display: grid;
   height: 100vh;
   grid-template-columns: 1fr 384px;
-  grid-template-rows: 54px 92px 1fr 118px 92px 80px 112px 20px;
+  grid-template-rows: 54px 1fr;
   grid-template-areas:
-    "top       top"
-    "fleet     ledger"
-    "plant     ledger"
-    "permit    ledger"
-    "registry  ledger"
-    "defences  ledger"
-    "queue     ledger"
-    "honesty   ledger";
+    "top  top"
+    "main ledger";
   gap: 1px;
   background: var(--rule);
 }
+/* The single screen was costing more than it bought: the plant — the
+   thing the operator actually reads — had been squeezed to a strip so
+   that eight bands could share one viewport. The main column scrolls;
+   the cross-section gets its room back. */
+.main {
+  grid-area: main;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--rule);
+  min-height: 0;
+}
+.main > * { flex: 0 0 auto; }
 
 .region {
   background: var(--ground);
@@ -105,7 +114,6 @@ body,
 
 /* ---- the fleet, as a crew on shift ---- */
 .fleet {
-  grid-area: fleet;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -215,7 +223,6 @@ body,
 
 /* ---- fences and the finding ---- */
 .defences {
-  grid-area: defences;
   display: grid;
   grid-template-columns: 1.15fr 1fr;
   gap: 20px;
@@ -298,12 +305,11 @@ body,
 
 /* ---- plant cross-section ---- */
 .plant {
-  grid-area: plant;
   position: relative;
-  padding: 8px 8px 0;
+  padding: 10px 10px 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 470px;
 }
 .plant > svg {
   flex: 1;
@@ -312,18 +318,20 @@ body,
 
 /* ---- permit lines ---- */
 .permit {
-  grid-area: permit;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: 1fr;
-  gap: 24px;
-  align-items: stretch;
-  padding: 10px 20px 14px;
+  gap: 22px;
+  padding: 7px 20px 8px;
+  background: var(--ground);
 }
 .param {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  /* Fixed rows, so a pinned parameter's extra attribution line cannot
+     shove one column's reading out of line with its neighbours'. */
+  display: grid;
+  grid-template-rows: 24px 22px auto;
+  gap: 2px;
+  min-width: 0;
   transition:
     transform 0.6s ease,
     opacity 0.6s ease;
@@ -338,10 +346,15 @@ body,
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
+.param .head .label { line-height: 1.25; }
+.param .head .lim { white-space: nowrap; }
 .param .val {
   font-family: var(--mono);
-  font-size: 22px;
+  font-size: 17px;
   font-weight: 600;
 }
 .param .lim {
@@ -351,7 +364,7 @@ body,
 }
 .bar {
   position: relative;
-  height: 44px;
+  height: 22px;
   background: var(--paper);
   border: 1px solid var(--rule);
 }
@@ -381,6 +394,7 @@ body,
 /* ---- ledger ---- */
 .ledger {
   grid-area: ledger;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--paper);
@@ -428,7 +442,6 @@ body,
 
 /* ---- request queue ---- */
 .queue {
-  grid-area: queue;
   display: flex;
   gap: 16px;
   align-items: stretch;
@@ -653,7 +666,6 @@ body,
 
 /* ---- registry: search, mount, report ---- */
 .registry-panel {
-  grid-area: registry;
   background: var(--paper);
   padding: 7px 16px;
   display: flex;
@@ -686,7 +698,6 @@ body,
 
 /* ---- the bottom band: the request, or the instruments ---- */
 .instruments {
-  grid-area: queue;
   background: var(--paper);
   padding: 8px 16px;
   display: grid;
@@ -730,7 +741,11 @@ body,
 .ghost:disabled { opacity: 0.45; cursor: default; }
 .inst { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .inst + .inst { border-left: 1px solid var(--rule); padding-left: 20px; }
-.inst-title { display: flex; align-items: center; gap: 8px; }
+.inst-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.inst-title .label { white-space: nowrap; }
+/* The qualifier drops to its own line rather than breaking the name of
+   the service it qualifies. */
+.inst-title .inst-sub { flex: 1 0 100%; }
 .inst-sub { font-size: 9.5px; color: var(--ink-soft); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--rule); }
 .dot.up { background: var(--green); }
@@ -796,3 +811,35 @@ body,
   color: var(--ink);
 }
 .ad-q-what { font-size: 11.5px; line-height: 1.45; color: var(--ink-soft); }
+
+/* ---- registry: a browsable list, not a guessing game ---- */
+.reg-note { font-size: 10.5px; color: var(--amber); }
+.reg-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 6px;
+  margin-top: 5px;
+}
+.reg-item {
+  border: 1px solid var(--rule);
+  border-left: 2px solid var(--rule);
+  background: var(--ground);
+  padding: 5px 9px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.reg-item.on { border-left-color: var(--teal); background: #f2f6f5; }
+.reg-item-main { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.reg-item-name { font-size: 11.5px; font-weight: 500; }
+.reg-origin { font-size: 9px; color: var(--ink-soft); margin-left: auto; }
+.reg-item-pub { font-size: 10px; color: var(--amber); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-item-act { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.reg-on { font-size: 10px; color: var(--teal); }
+.reg-standing { font-size: 9px; color: var(--ink-soft); }
+.ad-head-acts { display: flex; gap: 6px; align-items: flex-start; }
+
+/* ---- memory bank, where it can be seen ---- */
+.mb-fact { font-size: 10.5px; line-height: 1.4; }
+.mb-obs { font-size: 9px; color: var(--ink-soft); }
+.instruments { grid-template-columns: repeat(3, 1fr); }

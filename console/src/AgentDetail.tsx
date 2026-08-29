@@ -85,6 +85,10 @@ export function AgentDetail({
 
   if (!agent || !grant) return null;
   const meta = BRINGS[agent] ?? { governs: "", brings: "" };
+  // Only a mounted visitor can be sent home. The plant's own crew is not
+  // dismissed from a detail drawer — releasing flow-warden would leave
+  // the headworks unwatched with no record of who decided that.
+  const visiting = !grant.identity.endsWith("@cedar-ridge");
 
   return (
     <div className="agent-detail">
@@ -93,7 +97,25 @@ export function AgentDetail({
           <div className="ad-name mono">{grant.identity}</div>
           <div className="ad-governs">{meta.governs}</div>
         </div>
-        <button className="ghost" onClick={onClose}>close</button>
+        <div className="ad-head-acts">
+          {visiting && (
+            <button
+              className="ghost"
+              title="Send this specialist home. Recorded on the ledger."
+              onClick={async () => {
+                await fetch("/api/registry/unmount", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ role: agent }),
+                });
+                onClose();
+              }}
+            >
+              release from the roster
+            </button>
+          )}
+          <button className="ghost" onClick={onClose}>close</button>
+        </div>
       </div>
 
       {grant.quarantined && (
