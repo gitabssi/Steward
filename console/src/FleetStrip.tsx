@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import type { LedgerEntry, RosterGrant } from "./types";
+import type { LedgerEntry, PendingDecision, RosterGrant } from "./types";
 
 /** The fleet, as a fleet.
  *
@@ -30,10 +30,22 @@ interface AgentView {
 export function FleetStrip({
   roster,
   entries,
+  pending,
+  onOpenRequest,
 }: {
   roster: RosterGrant[];
   entries: LedgerEntry[];
+  pending: PendingDecision[];
+  onOpenRequest: (d: PendingDecision) => void;
 }) {
+  // A request belongs to whoever raised it. Showing it on their card is
+  // the difference between an actor asking for something and a queue
+  // that nobody owns.
+  const askedBy = new Map<string, PendingDecision>();
+  for (const d of pending.filter((x) => !x.resolved)) {
+    for (const who of d.asked_by ?? []) askedBy.set(who.split("@")[0], d);
+    if (!d.asked_by?.length) askedBy.set("fleet-orchestrator", d);
+  }
   const now = Date.now() / 1000;
 
   const agents = useMemo<AgentView[]>(() => {
@@ -103,8 +115,14 @@ export function FleetStrip({
           ]
             .filter(Boolean)
             .join(" ");
+          const request = askedBy.get(a.name);
           return (
-            <div className={cls} key={a.key} title={a.key}>
+            <div
+              className={cls + (request ? " asking" : "")}
+              key={a.key}
+              title={a.key}
+              onClick={() => request && onOpenRequest(request)}
+            >
               <div className="chip-top">
                 <span className="chip-name mono">{a.name}</span>
                 <span className={`chip-auth auth-${a.authority}`}>
@@ -114,6 +132,11 @@ export function FleetStrip({
               <div className="chip-doing">
                 {a.quarantined ? "pulled off the floor by the supervisor" : a.doing}
               </div>
+              {request && (
+                <button className="chip-request" onClick={(e) => { e.stopPropagation(); onOpenRequest(request); }}>
+                  needs a decision →
+                </button>
+              )}
               <div className="chip-scope mono">
                 {a.external ? "state primacy agency" : AUTHORITY_BLURB[a.authority] ?? ""}
               </div>

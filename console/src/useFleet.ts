@@ -14,11 +14,21 @@ export interface Finding {
   corpus: string;
 }
 
+export interface Runtime {
+  engine_id: string;
+  region: string;
+  deployed_at?: string;
+  age_seconds?: number;
+  identity_type?: string;
+  reachable: boolean;
+}
+
 export function useFleet() {
   const [entries, setEntries] = useState<LedgerEntry[]>([]);
   const [state, setState] = useState<ShiftState | null>(null);
   const [roster, setRoster] = useState<RosterGrant[]>([]);
   const [finding, setFinding] = useState<Finding | null>(null);
+  const [runtime, setRuntime] = useState<Runtime | null>(null);
   const [live, setLive] = useState(false);
   const seen = useRef(new Set<string>());
 
@@ -31,6 +41,11 @@ export function useFleet() {
         if (!("error" in body)) setFinding(body);
       } catch {
         /* the strip renders its own absence */
+      }
+      try {
+        setRuntime(await (await fetch("/api/runtime")).json());
+      } catch {
+        /* the top bar falls back to the shift clock */
       }
     })();
   }, []);
@@ -85,7 +100,7 @@ export function useFleet() {
     };
   }, []);
 
-  return { entries, state, roster, finding, live };
+  return { entries, state, roster, finding, runtime, live };
 }
 
 export async function decide(decision_id: string, action: string) {

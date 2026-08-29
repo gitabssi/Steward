@@ -1,4 +1,5 @@
 import type { ShiftState } from "./types";
+import type { Runtime } from "./useFleet";
 
 function uptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
@@ -9,6 +10,7 @@ function uptime(seconds: number): string {
 
 export function TopBar({
   state,
+  runtime,
   live,
   voice,
   speaking,
@@ -17,6 +19,7 @@ export function TopBar({
   onReopenCapacity,
 }: {
   state: ShiftState | null;
+  runtime: Runtime | null;
   live: boolean;
   voice: boolean;
   speaking: boolean;
@@ -37,9 +40,24 @@ export function TopBar({
         </div>
       </div>
       <div className="stat">
-        <div>
-          <span className="label">Agent Runtime · unbroken </span>
-          <span className="v">{state ? uptime(state.uptime_seconds) : "—"}</span>
+        <div
+          title={
+            runtime?.deployed_at
+              ? `engine ${runtime.engine_id} · deployed ${runtime.deployed_at}`
+              : "engine age unavailable"
+          }
+        >
+          <span className="label">Agent Runtime </span>
+          <span className="v">
+            {runtime?.age_seconds ? uptime(runtime.age_seconds) : "—"}
+          </span>
+          {runtime?.identity_type === "AGENT_IDENTITY" && (
+            <span className="label"> · own identity</span>
+          )}
+        </div>
+        <div title="this process; it restarts on a cold start, the engine above does not">
+          <span className="label">This shift </span>
+          <span className="v">{state ? uptime(state.shift_seconds) : "—"}</span>
         </div>
         <div>
           <span className="label">Time returned this week </span>

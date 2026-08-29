@@ -66,7 +66,7 @@ export function SystemLine({
   return (
     <div className="sysline">
       <div className="speaker">{line.speaker} · Chirp 3 HD · system voice, in product</div>
-      <div>{line.text}</div>
+      <div className="said">{line.text}</div>
     </div>
   );
 }

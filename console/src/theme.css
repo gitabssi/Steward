@@ -39,15 +39,16 @@ body,
   display: grid;
   height: 100vh;
   grid-template-columns: 1fr 384px;
-  grid-template-rows: 54px 82px 1fr 132px 92px 96px 20px;
+  grid-template-rows: 54px 92px 1fr 118px 92px 80px 112px 20px;
   grid-template-areas:
-    "top      top"
-    "fleet    ledger"
-    "plant    ledger"
-    "permit   ledger"
-    "defences ledger"
-    "queue    ledger"
-    "honesty  ledger";
+    "top       top"
+    "fleet     ledger"
+    "plant     ledger"
+    "permit    ledger"
+    "registry  ledger"
+    "defences  ledger"
+    "queue     ledger"
+    "honesty   ledger";
   gap: 1px;
   background: var(--rule);
 }
@@ -300,6 +301,13 @@ body,
   grid-area: plant;
   position: relative;
   padding: 8px 8px 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.plant > svg {
+  flex: 1;
+  min-height: 0;
 }
 
 /* ---- permit lines ---- */
@@ -459,14 +467,28 @@ body,
 }
 
 /* ---- system line (captions) ---- */
+/* The system's voice, captioned. It owns its own band beneath the
+   cross-section — it used to be absolutely positioned and a long
+   utterance printed straight over the plant. */
 .sysline {
-  position: absolute;
-  left: 24px;
-  bottom: 18px;
-  right: 24px;
+  flex: 0 0 auto;
+  margin: 4px 16px 10px;
+  padding: 8px 14px;
+  background: var(--paper);
+  border-left: 3px solid var(--teal);
   font-size: 15px;
-  line-height: 1.4;
-  min-height: 22px;
+  line-height: 1.45;
+  min-height: 46px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.sysline .said {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .sysline .speaker {
   font-family: var(--mono);
@@ -603,3 +625,122 @@ body,
 .forecast-by {
   color: var(--amber);
 }
+
+/* ---- a card whose agent is waiting on the operator ---- */
+.agent-chip.asking {
+  border-left-color: var(--amber);
+  background: #fbf6ec;
+  cursor: pointer;
+}
+@keyframes ask {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.chip-request {
+  margin-top: 2px;
+  align-self: flex-start;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  color: var(--amber);
+  background: none;
+  border: 1px solid var(--amber);
+  padding: 1px 6px;
+  cursor: pointer;
+  animation: ask 2.4s ease-in-out infinite;
+}
+.chip-request:hover { background: var(--amber); color: var(--paper); }
+
+/* ---- registry: search, mount, report ---- */
+.registry-panel {
+  grid-area: registry;
+  background: var(--paper);
+  padding: 7px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.reg-row { display: flex; align-items: center; gap: 10px; }
+.reg-row input {
+  flex: 1;
+  max-width: 460px;
+  font-size: 11.5px;
+  padding: 3px 8px;
+  border: 1px solid var(--rule);
+  background: var(--ground);
+  color: var(--ink);
+}
+.reg-result { display: flex; flex-direction: column; gap: 0; font-size: 11px; line-height: 1.3; }
+.reg-line { display: flex; align-items: baseline; gap: 9px; }
+.reg-ver { font-size: 10px; color: var(--teal); }
+.reg-pin { font-size: 9.5px; }
+.reg-pin.ok { color: var(--teal); }
+.reg-pin.bad { color: var(--red); }
+.reg-src { font-size: 9.5px; color: var(--ink-soft); }
+.reg-pub { font-size: 10px; color: var(--amber); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reg-desc { display: none; }
+.reg-none, .reg-mounted { font-size: 11px; color: var(--ink-soft); }
+.reg-actions { margin-top: 2px; }
+.reg-line { flex-wrap: wrap; }
+
+/* ---- the bottom band: the request, or the instruments ---- */
+.instruments {
+  grid-area: queue;
+  background: var(--paper);
+  padding: 8px 16px;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 22px;
+  overflow: hidden;
+}
+.instruments.request-open {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-left: 3px solid var(--amber);
+}
+.inst-head { display: flex; align-items: baseline; gap: 12px; }
+.asked-by { font-size: 10px; color: var(--teal); }
+.window { font-size: 10.5px; color: var(--amber); margin-left: auto; }
+.req-subject { font-size: 13.5px; font-weight: 600; }
+.req-options { display: flex; gap: 8px; }
+.req-option {
+  flex: 1; min-width: 0; text-align: left; cursor: pointer;
+  background: var(--ground); border: 1px solid var(--rule);
+  border-left: 2px solid var(--teal);
+  padding: 5px 10px; display: flex; flex-direction: column; gap: 1px;
+}
+.req-option:hover { border-left-color: var(--amber); background: #fbf6ec; }
+.opt-action { font-size: 11.5px; color: var(--ink); }
+.opt-cost { font-size: 9.5px; color: var(--red); }
+.opt-by { font-size: 9px; color: var(--ink-soft); }
+.readback { display: flex; align-items: center; gap: 12px; font-size: 12.5px; }
+.confirm {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+  background: var(--ink); color: var(--ground); border: none;
+  padding: 5px 16px; cursor: pointer;
+}
+.ghost {
+  font-family: var(--mono); font-size: 10.5px;
+  background: none; border: 1px solid var(--rule); color: var(--ink);
+  padding: 3px 10px; cursor: pointer;
+}
+.ghost:hover { border-color: var(--teal); color: var(--teal); }
+.ghost:disabled { opacity: 0.45; cursor: default; }
+.inst { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.inst + .inst { border-left: 1px solid var(--rule); padding-left: 20px; }
+.inst-title { display: flex; align-items: center; gap: 8px; }
+.inst-sub { font-size: 9.5px; color: var(--ink-soft); }
+.dot { width: 6px; height: 6px; border-radius: 50%; background: var(--rule); }
+.dot.up { background: var(--green); }
+.dot.down { background: var(--red); }
+.inst-body { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.deident { font-size: 10px; line-height: 1.35; }
+.deident .raw { color: var(--ink-soft); }
+.deident .out { color: var(--teal); }
+.forecast { gap: 1px; }
+.fc-row { display: flex; gap: 10px; font-size: 10.5px; align-items: baseline; }
+.fc-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fc-num { color: var(--teal); font-weight: 600; }
+.fc-lead { color: var(--ink-soft); font-size: 9.5px; }

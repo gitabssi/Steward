@@ -20,6 +20,7 @@ Reads:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 
 from fastapi import APIRouter, FastAPI
@@ -28,7 +29,7 @@ from pydantic import BaseModel
 
 from app.fleet import shift
 from app.fleet.authority import POLICY, Authority
-from app.fleet.events import BUS
+from app.fleet.events import BUS, EventKind, Outcome
 from app.fleet.identity import describe_scopes
 from app.fleet.memory import MEMORY
 
@@ -86,14 +87,93 @@ async def state() -> dict:
                 "options": d.options,
                 "window_minutes": d.window_minutes,
                 "resolved": d.resolved,
+                # Which agents raised this. The console lights their cards,
+                # so a request reads as coming from someone rather than
+                # appearing in a queue nobody owns.
+                "asked_by": sorted(
+                    {o.get("offered_by", "") for o in d.options if o.get("offered_by")}
+                ),
             }
             for d in s.pending.values()
         ],
         "obligations_degraded": s.obligations_degraded,
         "week": s.week,
-        "uptime_seconds": __import__("time").time() - s.started_at,
+        # This process's own clock. Deliberately named for what it is:
+        # it resets on a cold start, and the Agent Runtime engine's age
+        # is a different number entirely (see /api/runtime).
+        "shift_seconds": __import__("time").time() - s.started_at,
         "minutes_on_shift": round(loop.world.minutes, 1),
     }
+
+
+# The engine's age is a property of the platform, not of this process.
+# Cached because it never changes between deploys and the console asks
+# often.
+_RUNTIME_CACHE: dict[str, object] = {}
+
+
+@router.get("/runtime")
+async def runtime() -> dict:
+    """How long the Agent Runtime engine has actually been deployed.
+
+    The console used to show this process's own uptime under an "Agent
+    Runtime" label, which reset on every Cloud Run cold start and was
+    therefore both wrong and unflattering. The engine is a platform
+    resource with its own lifetime; this reports that, and says plainly
+    that the shift loop's own clock is a separate thing.
+    """
+    import time as _t
+    import urllib.request
+
+    now = _t.time()
+    if _RUNTIME_CACHE.get("at", 0) and now - float(_RUNTIME_CACHE["at"]) < 600:
+        return dict(_RUNTIME_CACHE["value"])  # type: ignore[arg-type]
+
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+    region = os.environ.get("AGENT_RUNTIME_LOCATION", "us-central1")
+    engine = os.environ.get("AGENT_ENGINE_MEMORY_BANK", "").rsplit("/", 1)[-1] or os.environ.get(
+        "GOOGLE_CLOUD_AGENT_ENGINE_ID", ""
+    )
+    out: dict[str, object] = {"engine_id": engine, "region": region}
+    if project and engine:
+        try:
+            import google.auth
+            import google.auth.transport.requests
+
+            creds, _ = google.auth.default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            creds.refresh(google.auth.transport.requests.Request())
+            url = (
+                f"https://{region}-aiplatform.googleapis.com/v1/projects/{project}"
+                f"/locations/{region}/reasoningEngines/{engine}"
+            )
+            req = urllib.request.Request(
+                url, headers={"Authorization": f"Bearer {creds.token}"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as r:
+                d = json.load(r)
+            created = d.get("createTime", "")
+            import datetime as _dt
+
+            t = _dt.datetime.fromisoformat(created.replace("Z", "+00:00"))
+            age = _dt.datetime.now(_dt.UTC) - t
+            out.update(
+                {
+                    "deployed_at": created,
+                    "age_seconds": age.total_seconds(),
+                    "identity_type": (d.get("spec") or {}).get("identityType"),
+                    "display_name": d.get("displayName"),
+                    "reachable": True,
+                }
+            )
+        except Exception as exc:
+            out.update({"reachable": False, "error": str(exc)[:120]})
+    else:
+        out.update({"reachable": False, "error": "no engine id configured"})
+    _RUNTIME_CACHE["at"] = now
+    _RUNTIME_CACHE["value"] = out
+    return dict(out)
 
 
 @router.get("/roster")
@@ -146,6 +226,98 @@ async def reconfigure(req: Reconfigure) -> dict:
     return record
 
 
+class RegistrySearch(BaseModel):
+    role: str
+
+
+@router.post("/registry/search")
+async def registry_search(req: RegistrySearch) -> dict:
+    """Search the Agent Registry for a role, the way the fleet does.
+
+    The operator can do what the fleet does when a condition surfaces a
+    role nobody catalogued: ask the registry who publishes it.
+    """
+    _ensure_shift()
+    if shift.LOOP is None:
+        return {"error": "shift loop not started"}
+    reg = shift.LOOP.registry
+    found = await asyncio.to_thread(reg.search, req.role.strip())
+    if found is None:
+        return {"role": req.role, "found": False}
+    return {
+        "role": req.role, "found": True, "name": found.name,
+        "publisher": found.publisher, "department": found.department,
+        "description": found.description, "version": found.version,
+        "pinned": found.pinned, "satisfies_pin": found.satisfies_pin(),
+        "source": found.source, "skills": found.skills,
+        "mounted": found.name in reg._mounted,
+    }
+
+
+class RegistryMount(BaseModel):
+    role: str
+
+
+@router.post("/registry/mount")
+async def registry_mount(req: RegistryMount) -> dict:
+    """Mount a discovered specialist. Refused if it fails the pin."""
+    _ensure_shift()
+    if shift.LOOP is None:
+        return {"error": "shift loop not started"}
+    entry = await asyncio.to_thread(shift.LOOP.registry.mount, req.role.strip())
+    if entry is None:
+        return {"mounted": False, "reason": "not found, or refused by the version pin"}
+    if shift.LOOP.bypass_specialist is None and "bypass" in entry.name:
+        from app.fleet.agents import workers
+
+        shift.LOOP.bypass_specialist = workers.make_bypass_specialist()
+    return {"mounted": True, "name": entry.name, "version": entry.version,
+            "publisher": entry.publisher, "source": entry.source}
+
+
+@router.get("/edge")
+async def edge_status() -> dict:
+    """The OT boundary: what Gemma is, and where it runs."""
+    import urllib.request
+
+    base = os.environ.get("EDGE_ENDPOINT", "https://steward-edge-i64yn4kmyq-uc.a.run.app")
+    try:
+        with urllib.request.urlopen(f"{base}/health", timeout=8) as r:
+            return {"reachable": True, "endpoint": base, **json.load(r)}
+    except Exception as exc:
+        return {"reachable": False, "endpoint": base, "error": str(exc)[:120]}
+
+
+class EdgeNote(BaseModel):
+    text: str
+
+
+@router.post("/edge/transcribe")
+async def edge_transcribe(note: EdgeNote) -> dict:
+    """Send a round note through the boundary and show what comes back.
+
+    The data-sovereignty claim, made touchable: raw text goes in, and
+    only the de-identified form comes out.
+    """
+    import urllib.request
+
+    base = os.environ.get("EDGE_ENDPOINT", "https://steward-edge-i64yn4kmyq-uc.a.run.app")
+    body = json.dumps({"text": note.text}).encode()
+    try:
+        request = urllib.request.Request(
+            f"{base}/transcribe", data=body,
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=30) as r:
+            out = json.load(r)
+        BUS.record(
+            EventKind.GUARD, "gemma-edge@ot-boundary",
+            "round note de-identified on-plant — only this left the segment",
+            Outcome.ALLOW, model=out.get("model"), path=out.get("path"))
+        return {"raw": note.text, **out}
+    except Exception as exc:
+        return {"error": str(exc)[:160], "raw": note.text}
+
+
 class Speak(BaseModel):
     text: str
 
@@ -176,6 +348,28 @@ async def speak(req: Speak):
         return Response(content=audio.audio_content, media_type="audio/mpeg")
     except Exception as exc:
         return {"error": f"voice unavailable — captions carry the line: {exc}"[:200]}
+
+
+@router.get("/finding/by-parameter")
+async def finding_by_parameter() -> dict:
+    """Where the TimesFM forecast earns its keep, per pollutant.
+
+    The permit sentinel's exceedance outlook comes from this model; this
+    is its measured record on the national corpus.
+    """
+    from google.cloud import bigquery
+
+    project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
+    dataset = os.environ.get("BQ_DATASET", "steward_npdes")
+    try:
+        client = bigquery.Client(project=project)
+        rows = list(client.query(
+            f"SELECT parameter_desc, facilities, exceedance_months, recall_pct, "
+            f"median_lead_days FROM `{project}.{dataset}.finding_by_parameter` "
+            f"ORDER BY exceedance_months DESC LIMIT 6").result())
+        return {"parameters": [dict(r) for r in rows]}
+    except Exception as exc:
+        return {"error": f"unavailable: {exc}"[:200]}
 
 
 @router.get("/finding")

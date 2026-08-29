@@ -43,6 +43,7 @@ export interface PendingDecision {
   options: { action: string; offered_by: string; costs: string[]; window_minutes: number }[];
   window_minutes: number;
   resolved: string | null;
+  asked_by?: string[];
 }
 
 export interface ShiftState {
@@ -66,7 +67,7 @@ export interface ShiftState {
     obligations_protected: number;
     obligations_degraded: number;
   };
-  uptime_seconds: number;
+  shift_seconds: number;
   minutes_on_shift: number;
 }
 
