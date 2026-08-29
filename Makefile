@@ -94,6 +94,13 @@ backtest:
 #   STEWARD_MEMORY_BANK_LOCATION   third instance of the same trap: Memory
 #                                  Bank is regional too, so it cannot
 #                                  inherit `global` either.
+# The harness that makes the supervisor's job real: a cache serves one
+# worker forty-minute-old telemetry. Nothing tells the supervisor to
+# quarantine anyone — it re-reads the cited sensor and decides. Without
+# this the deployed fleet has nothing to catch, and the audit trail shows
+# a system that has never been tested.
+FAULT ?= stale_lab_context
+
 FLEET_ENV = GOOGLE_GENAI_USE_VERTEXAI=true \
   GOOGLE_CLOUD_PROJECT=$(PROJECT) \
   GOOGLE_CLOUD_LOCATION=global \
@@ -103,7 +110,8 @@ FLEET_ENV = GOOGLE_GENAI_USE_VERTEXAI=true \
   STEWARD_MEMORY_SCOPE=$(MEMORY_SCOPE) \
   BQ_DATASET=$(BQ_DATASET) \
   OTEL_SERVICE_NAME=steward \
-  GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=true
+  GOOGLE_CLOUD_AGENT_ENGINE_ENABLE_TELEMETRY=true \
+  STEWARD_FAULT_INJECTION=$(FAULT)
 
 comma := ,
 space := $(subst ,, )
