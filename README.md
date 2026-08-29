@@ -129,17 +129,46 @@ curl -sN https://steward-fleet-649854119911.us-central1.run.app/api/events | hea
 
 ## The track's three must-demonstrates, by name
 
-**Cataloged for cross-department use.** The registry holds agent cards
-from **two publishers**: the Steward fleet, and the **state primacy
-agency** ([primacy/](primacy/)) — a separate service under its own
-identity. The wet-weather bypass specialist is deliberately absent from
-the boot catalog; when an emerging condition surfaces the role, the
-fleet resolves it **live** from the agency's A2A agent card (latency
-measured, in the ledger) and mounts it cross-department with recommend
-authority and single-facility scope. The Control Centre shows both
-publishers side by side. The fleet itself is served over A2A and
-registered on the **platform's own Agent Registry** via Agent Runtime
-deployment — not a hand-rolled catalog.
+**Cataloged for cross-department use.** Discovery runs against the
+**managed Agent Registry** (`agentregistry.googleapis.com`), with the
+bundled catalog as a fallback — and every REGISTRY row in the ledger
+names which of the two answered, the same way the Model Armor screener
+names itself.
+
+Two publishers are registered there. The fleet itself was registered
+automatically when it deployed to Agent Runtime, and its record carries
+the runtime identity principal, the framework (`google-adk`) and its
+query endpoints:
+
+```bash
+curl -s -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "x-goog-user-project: steward-fleet-2026" \
+  https://agentregistry.googleapis.com/v1/projects/steward-fleet-2026/locations/us-central1/agents
+```
+
+The **state primacy agency** ([primacy/](primacy/)) is registered as an
+external `Service` carrying its own A2A card, so the second publisher is
+a real cross-organisation record rather than a line in a file we wrote.
+The bypass specialist is deliberately absent from the boot catalog; when
+an emerging condition surfaces the role, the fleet resolves it live
+(latency in the ledger) and mounts it with recommend authority and
+single-facility scope.
+
+**Versioning came out of that rather than being invented for it.** The
+registry validates cards on the way in and refused ours until it
+advertised a `version` — so the version a consumer pins against is the
+publisher's own, not a number we made up. The fleet pins the external
+specialist to `^1.0` and **refuses a major bump on the record**: a
+specialist that changes major version has changed its published reading
+of the regulation, and mounting it quietly would be the opposite of
+governance.
+
+That same validation caught two genuine interoperability bugs in our
+card, which is the argument for using the managed service rather than
+trusting our own file: it carried a v0.3 top-level `protocolVersion`
+*and* v1 `supportedInterfaces`, and then both `url` and
+`supportedInterfaces`. Neither would have been noticed by a catalog we
+validated ourselves.
 
 **Safely maintain context across weeks of asynchronous operations.**
 The shift loop deploys to **Vertex AI Agent Runtime** as a long-lived

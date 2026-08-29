@@ -45,7 +45,9 @@ def agent_card() -> dict:
             "lawful, what evidence the determination needs, and what the "
             "facility owes afterward. Recommend-only by publication policy."
         ),
-        "url": f"{base}/a2a",
+        # No top-level "url": that is the v0.3 shape, and a card carrying
+        # both it and supportedInterfaces is ambiguous. The registry
+        # rejects the mixture, which is how we found this.
         "provider": {"organization": AGENCY, "url": base},
         "supportedInterfaces": [
             {
