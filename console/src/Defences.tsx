@@ -19,6 +19,8 @@ interface Shield {
   key: string;
   label: string;
   by: string;
+  /** What this fence actually stops, in the operator's terms. */
+  why: string;
   count: number;
   lastAgo: number;
 }
@@ -58,6 +60,7 @@ export function Defences({
           ? `${armor.count} screened · ${stripped.count} stripped`
           : `${armor.count} screened`,
         by: "Model Armor · inbound documents",
+        why: "Every lab report, manifest and briefing is screened before any agent reads it. An instruction hidden in a document is stripped; the reported values are kept.",
         count: armor.count,
         lastAgo: Math.min(armor.lastAgo, stripped.lastAgo),
       },
@@ -65,6 +68,7 @@ export function Defences({
         key: "scope",
         label: `${denied.count} denied`,
         by: "Agent Identity · per-facility scope",
+        why: "Each agent is scoped to this permit and nothing else. A request for another facility's records is refused and recorded, whoever makes it.",
         count: denied.count,
         lastAgo: denied.lastAgo,
       },
@@ -72,6 +76,7 @@ export function Defences({
         key: "supervisor",
         label: `${held.count} withheld`,
         by: "Supervisor · unsourced claims",
+        why: "Every number an agent asserts must cite a source the supervisor can re-read. No source, or a contradiction with the live sensor, and the claim never reaches you.",
         count: held.count,
         lastAgo: held.lastAgo,
       },
@@ -79,6 +84,7 @@ export function Defences({
         key: "human",
         label: `${gated.count} approved by hand`,
         by: "No agent may act irreversibly",
+        why: "Irreversible actions need a single-use token that only your confirmed decision can mint. No agent at any authority level can execute one alone.",
         count: gated.count,
         lastAgo: gated.lastAgo,
       },
@@ -94,6 +100,7 @@ export function Defences({
             <div
               key={s.key}
               className={`shield ${s.count ? "engaged" : ""} ${s.lastAgo < 6 ? "firing" : ""}`}
+              title={s.why}
             >
               <div className="shield-count mono">{s.label}</div>
               <div className="shield-by">{s.by}</div>

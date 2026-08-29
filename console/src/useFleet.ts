@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { LedgerEntry, RosterGrant, ShiftState } from "./types";
+import type { LearnedFact, LedgerEntry, RosterGrant, ShiftState } from "./types";
 
 /** One SSE subscription to the fleet's ledger, plus state polling.
  *  If the stream drops, the console degrades (banner via `live=false`)
@@ -29,6 +29,8 @@ export function useFleet() {
   const [roster, setRoster] = useState<RosterGrant[]>([]);
   const [finding, setFinding] = useState<Finding | null>(null);
   const [runtime, setRuntime] = useState<Runtime | null>(null);
+  const [facts, setFacts] = useState<LearnedFact[]>([]);
+  const [memoryBackend, setMemoryBackend] = useState<string>("");
   const [live, setLive] = useState(false);
   const seen = useRef(new Set<string>());
 
@@ -87,6 +89,8 @@ export function useFleet() {
       try {
         const body = await (await fetch("/api/roster")).json();
         if (body.grants) setRoster(body.grants);
+        if (body.learned_facts) setFacts(body.learned_facts);
+        if (body.memory_backend) setMemoryBackend(body.memory_backend);
       } catch {
         /* keep the last known roster */
       }
@@ -100,7 +104,7 @@ export function useFleet() {
     };
   }, []);
 
-  return { entries, state, roster, finding, runtime, live };
+  return { entries, state, roster, finding, runtime, facts, memoryBackend, live };
 }
 
 export async function decide(decision_id: string, action: string) {

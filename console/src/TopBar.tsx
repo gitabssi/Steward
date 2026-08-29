@@ -55,10 +55,6 @@ export function TopBar({
             <span className="label"> · own identity</span>
           )}
         </div>
-        <div title="this process; it restarts on a cold start, the engine above does not">
-          <span className="label">This shift </span>
-          <span className="v">{state ? uptime(state.shift_seconds) : "—"}</span>
-        </div>
         <div>
           <span className="label">Time returned this week </span>
           <span className="v">{state?.week?.process_check_hours_returned ?? "—"}h</span>

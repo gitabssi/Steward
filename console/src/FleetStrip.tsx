@@ -32,11 +32,13 @@ export function FleetStrip({
   entries,
   pending,
   onOpenRequest,
+  onOpenAgent,
 }: {
   roster: RosterGrant[];
   entries: LedgerEntry[];
   pending: PendingDecision[];
   onOpenRequest: (d: PendingDecision) => void;
+  onOpenAgent: (name: string) => void;
 }) {
   // A request belongs to whoever raised it. Showing it on their card is
   // the difference between an actor asking for something and a queue
@@ -109,6 +111,7 @@ export function FleetStrip({
           const active = a.activeAgo < 6;
           const cls = [
             "agent-chip",
+            "clickable",
             a.quarantined ? "quarantined" : "",
             active ? "active" : "",
             a.external ? "external" : "",
@@ -121,7 +124,7 @@ export function FleetStrip({
               className={cls + (request ? " asking" : "")}
               key={a.key}
               title={a.key}
-              onClick={() => request && onOpenRequest(request)}
+              onClick={() => onOpenAgent(a.name)}
             >
               <div className="chip-top">
                 <span className="chip-name mono">{a.name}</span>

@@ -182,7 +182,15 @@ async def roster() -> dict:
     scopes = describe_scopes()
     facts = MEMORY.facts()
     registry = shift.LOOP.registry.roster() if shift.LOOP else []
-    return {"grants": scopes, "learned_facts": facts, "registry": registry}
+    return {
+        "grants": scopes,
+        "learned_facts": facts,
+        "registry": registry,
+        # Which store is actually behind those facts — the console says
+        # so rather than implying Memory Bank is live when it is not.
+        "memory_backend": MEMORY.backend,
+        "memory_hydrated": MEMORY.hydrated,
+    }
 
 
 class Decision(BaseModel):

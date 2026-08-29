@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Capacity } from "./Capacity";
 import { ControlCentre } from "./ControlCentre";
 import { Defences } from "./Defences";
+import { AgentDetail } from "./AgentDetail";
 import { FleetStrip } from "./FleetStrip";
 import { Ledger } from "./Ledger";
 import { PermitLines } from "./PermitLines";
@@ -14,11 +15,13 @@ import type { PendingDecision } from "./types";
 import { useFleet } from "./useFleet";
 
 export default function App() {
-  const { entries, state, roster, finding, runtime, live } = useFleet();
+  const { entries, state, roster, finding, runtime, facts, memoryBackend, live } =
+    useFleet();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [capacityDismissed, setCapacityDismissed] = useState(false);
   const [voice, setVoice] = useState(false);
   const [openRequest, setOpenRequest] = useState<PendingDecision | null>(null);
+  const [openAgent, setOpenAgent] = useState<string | null>(null);
   const [speaking, setSpeaking] = useState(false);
 
   const capacityEntry = useMemo(
@@ -48,6 +51,7 @@ export default function App() {
           entries={entries}
           pending={state?.pending ?? []}
           onOpenRequest={setOpenRequest}
+          onOpenAgent={setOpenAgent}
         />
         <div className="region plant">
           <PlantSection state={state} entries={entries} live={live} />
@@ -67,6 +71,15 @@ export default function App() {
           models, live Google Cloud.
         </div>
       </div>
+
+      <AgentDetail
+        agent={openAgent}
+        roster={roster}
+        entries={entries}
+        facts={facts}
+        memoryBackend={memoryBackend}
+        onClose={() => setOpenAgent(null)}
+      />
 
       <ControlCentre open={drawerOpen} onClose={() => setDrawerOpen(false)} />
 
