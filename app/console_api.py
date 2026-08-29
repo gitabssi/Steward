@@ -319,6 +319,7 @@ async def registry_list() -> dict:
                     name = card.get("name") or item.get("displayName", "")
                     if not name:
                         continue
+                    pin = reg._pins.get(name, "")
                     out.setdefault(
                         name,
                         {
@@ -329,6 +330,17 @@ async def registry_list() -> dict:
                             "description": card.get("description")
                             or item.get("description", ""),
                             "version": card.get("version", ""),
+                            # The pin is the consumer's, not the
+                            # publisher's, so it applies to an agent
+                            # however it was discovered — a version range
+                            # that only shows up on one code path is not a
+                            # policy, it is a coincidence.
+                            "pinned": pin,
+                            "satisfies_pin": (
+                                not pin
+                                or card.get("version", "0.0.0").split(".")[0]
+                                == pin.lstrip("^~>=<! ").split(".")[0]
+                            ),
                             "mounted": False,
                             "origin": "Agent Registry",
                             "skills": [x.get("id", "") for x in skills],
