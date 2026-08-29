@@ -7,7 +7,12 @@
       "department": "steward-fleet",
       "description": "Hydraulic load at the headworks: influent flow, infiltration, retention time across the train.",
       "endpoint": "",
-      "skills": ["influent-forecast", "retention-time", "surge-response"]
+      "skills": [
+        "influent-forecast",
+        "retention-time",
+        "surge-response"
+      ],
+      "version": "1.0.0"
     },
     {
       "name": "aeration-keeper",
@@ -15,7 +20,12 @@
       "department": "steward-fleet",
       "description": "The biology on the aeration basin: dissolved oxygen, mixed liquor health, nitrification state.",
       "endpoint": "",
-      "skills": ["do-management", "biology-stress", "blower-setpoints"]
+      "skills": [
+        "do-management",
+        "biology-stress",
+        "blower-setpoints"
+      ],
+      "version": "1.0.0"
     },
     {
       "name": "permit-sentinel",
@@ -23,7 +33,12 @@
       "department": "steward-fleet",
       "description": "The permit at the outfall: every enforceable limit, exceedance probability from the TimesFM forecast, reporting obligations.",
       "endpoint": "",
-      "skills": ["limit-watch", "exceedance-forecast", "dmr-obligations"]
+      "skills": [
+        "limit-watch",
+        "exceedance-forecast",
+        "dmr-obligations"
+      ],
+      "version": "1.0.0"
     },
     {
       "name": "weather-scout",
@@ -31,16 +46,29 @@
       "department": "steward-fleet",
       "description": "What the sky is about to do to the plant: precipitation bands, dry spells, dilution at the downstream intake.",
       "endpoint": "",
-      "skills": ["precip-forecast", "dilution-ratio", "drought-watch"]
+      "skills": [
+        "precip-forecast",
+        "dilution-ratio",
+        "drought-watch"
+      ],
+      "version": "1.0.0"
     },
     {
       "name": "notification-clerk",
       "publisher": "Steward Fleet",
       "department": "steward-fleet",
-      "description": "Drafts — never sends — operator handover notes and any public or regulator notification.",
+      "description": "Drafts \u2014 never sends \u2014 operator handover notes and any public or regulator notification.",
       "endpoint": "",
-      "skills": ["handover-draft", "notification-draft"]
+      "skills": [
+        "handover-draft",
+        "notification-draft"
+      ],
+      "version": "1.0.0"
     }
   ],
-  "_note": "The wet-weather bypass specialist is deliberately absent: it is published by the state primacy agency (see primacy/), discovered by live registry resolve at the moment the plant needs it. publisher_endpoints is extended at runtime from PRIMACY_AGENCY_ENDPOINT."
+  "_note": "The wet-weather bypass specialist is deliberately absent: it is published by the state primacy agency (see primacy/), discovered by live registry resolve at the moment the plant needs it. publisher_endpoints is extended at runtime from PRIMACY_AGENCY_ENDPOINT.",
+  "pins": {
+    "wet-weather-bypass-specialist": "^1.0"
+  },
+  "_pins_note": "What this fleet will accept from another department. A specialist that changes major version has changed its reading of the regulation; the registry refuses it and says so rather than mounting it quietly."
 }

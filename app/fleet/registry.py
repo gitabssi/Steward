@@ -7,6 +7,18 @@ wet-weather bypass specialist among them). Cross-department use is the
 point: the card says who published it, and the console shows both
 publishers side by side.
 
+Discovery goes to the **managed Agent Registry** when the project has
+one, and falls back to the bundled catalog when it does not — and every
+REGISTRY ledger row names which of the two answered. That is the same
+mechanism the Model Armor screener uses to report itself, for the same
+reason: a fallback nobody can see is indistinguishable from a claim.
+
+Agents deployed to Agent Runtime register themselves; an external
+publisher like the state primacy agency is registered as a `Service`
+carrying its A2A card. The registry validates those cards on the way in
+— it rejected ours until the card advertised a `version`, which is where
+the version a consumer pins against comes from.
+
 Deviation from the platform guidance, on purpose: Google's docs recommend
 resolving agents once at startup for latency. Steward caches the catalog
 at boot **and** resolves live on a miss, because an emerging condition at
@@ -40,6 +52,21 @@ class CatalogEntry:
     description: str
     endpoint: str  # A2A base URL ("" for in-process fleet members)
     skills: list[str] = field(default_factory=list)
+    version: str = "0.0.0"  # as advertised by the publisher's own card
+    pinned: str = ""  # the range this consumer will accept
+    source: str = "local-catalog"  # "agent-registry" when the API answered
+
+    def satisfies_pin(self) -> bool:
+        """Major-version compatibility, the only pin worth enforcing here.
+
+        A specialist that changed its major version has changed its
+        reading of the regulation; mounting it silently would be the
+        opposite of governance.
+        """
+        if not self.pinned:
+            return True
+        want = self.pinned.lstrip("^~>=<! ").split(".")[0]
+        return self.version.split(".")[0] == want
 
 
 class Registry:
@@ -48,10 +75,12 @@ class Registry:
     def __init__(self) -> None:
         self._cache: dict[str, CatalogEntry] = {}
         self._mounted: dict[str, CatalogEntry] = {}
+        self._pins: dict[str, str] = {}
         self.load_catalog()
 
     def load_catalog(self) -> None:
         raw = json.loads(CATALOG_PATH.read_text())
+        self._pins = dict(raw.get("pins", {}))
         for item in raw["agents"]:
             entry = CatalogEntry(**item)
             self._cache[entry.name] = entry
@@ -82,17 +111,19 @@ class Registry:
     def _resolve_live(self, role: str) -> CatalogEntry | None:
         """A miss is not a failure — it is the reason the registry exists."""
         t0 = time.perf_counter()
-        for entry in self._probe_known_publishers(role):
+        for entry in self._candidates(role):
             latency_ms = (time.perf_counter() - t0) * 1000
             self._cache[entry.name] = entry
             BUS.record(
                 EventKind.REGISTRY,
                 "agent-registry",
-                f"live resolve: {role} — found, published by {entry.publisher}",
+                f"live resolve: {role} v{entry.version} — published by {entry.publisher}",
                 Outcome.ALLOW,
                 latency_ms=round(latency_ms, 1),
                 department=entry.department,
                 cross_department=entry.department != "steward-fleet",
+                registry=entry.source,
+                version=entry.version,
             )
             return entry
         BUS.record(
@@ -103,6 +134,75 @@ class Registry:
             latency_ms=round((time.perf_counter() - t0) * 1000, 1),
         )
         return None
+
+    def _query_agent_registry(self, role: str):
+        """Ask the managed Agent Registry what this project knows about.
+
+        Services registered there carry their publisher's A2A card, so a
+        role match here is a real cross-organisation discovery rather
+        than a lookup in a file we shipped ourselves.
+        """
+        project = os.environ.get("GOOGLE_CLOUD_PROJECT")
+        if not project or os.environ.get("AGENT_REGISTRY", "on") == "off":
+            return
+        location = os.environ.get("AGENT_REGISTRY_LOCATION", "us-central1")
+        try:
+            import google.auth
+            import google.auth.transport.requests
+
+            creds, _ = google.auth.default(
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            creds.refresh(google.auth.transport.requests.Request())
+            url = (
+                f"https://agentregistry.googleapis.com/v1/projects/{project}"
+                f"/locations/{location}/services"
+            )
+            request = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"Bearer {creds.token}",
+                    "x-goog-user-project": project,
+                },
+            )
+            with urllib.request.urlopen(request, timeout=8) as response:
+                services = json.load(response).get("services", [])
+        except Exception as exc:
+            BUS.record(
+                EventKind.REGISTRY,
+                "agent-registry",
+                "managed registry unreachable — falling back to the bundled catalog",
+                Outcome.INFO,
+                error=str(exc)[:160],
+            )
+            return
+
+        for service in services:
+            card = (service.get("agentSpec") or {}).get("content") or {}
+            skills = card.get("skills", [])
+            if not any(role in (s.get("id"), s.get("name")) for s in skills):
+                continue
+            provider = card.get("provider", {})
+            yield CatalogEntry(
+                name=role,
+                publisher=provider.get("organization")
+                or service.get("displayName", "unknown"),
+                department=provider.get("organization", "external"),
+                description=next(
+                    (s.get("description", "") for s in skills if role in (s.get("id"), s.get("name"))),
+                    service.get("description", ""),
+                ),
+                endpoint=(provider.get("url") or "").rstrip("/"),
+                skills=[s.get("id", "") for s in skills],
+                version=card.get("version", "0.0.0"),
+                pinned=self._pins.get(role, ""),
+                source="agent-registry",
+            )
+
+    def _candidates(self, role: str):
+        """Managed registry first, then the publishers we shipped."""
+        yield from self._query_agent_registry(role)
+        yield from self._probe_known_publishers(role)
 
     def _probe_known_publishers(self, role: str):
         """Fetch A2A agent cards from every known publisher endpoint."""
@@ -128,6 +228,9 @@ class Registry:
                             description=skill.get("description", ""),
                             endpoint=base,
                             skills=[s.get("id", "") for s in card.get("skills", [])],
+                            version=card.get("version", "0.0.0"),
+                            pinned=self._pins.get(role, ""),
+                            source="publisher-card",
                         )
             except Exception:
                 continue  # unreachable publisher; try the next one
@@ -138,15 +241,34 @@ class Registry:
         entry = self.search(role)
         if entry is None:
             return None
+        if not entry.satisfies_pin():
+            # A major-version change means the published reading of the
+            # regulation changed. Mounting it anyway would be the
+            # opposite of governance, so this is a refusal on the record.
+            BUS.record(
+                EventKind.REGISTRY,
+                "agent-registry",
+                f"refused to mount {role} v{entry.version} — "
+                f"this fleet is pinned to {entry.pinned}",
+                Outcome.DENY,
+                publisher=entry.publisher,
+                version=entry.version,
+                pinned=entry.pinned,
+            )
+            return None
         self._mounted[role] = entry
         BUS.record(
             EventKind.REGISTRY,
             "agent-registry",
-            f"mounted {role}",
+            f"mounted {role} v{entry.version}"
+            + (f", consumer pinned {entry.pinned}" if entry.pinned else ""),
             Outcome.ALLOW,
             publisher=entry.publisher,
             department=entry.department,
             cross_department=entry.department != "steward-fleet",
+            version=entry.version,
+            pinned=entry.pinned,
+            registry=entry.source,
         )
         return entry
 
@@ -158,6 +280,9 @@ class Registry:
                 "department": e.department,
                 "description": e.description,
                 "mounted": e.name in self._mounted,
+                "version": e.version,
+                "pinned": e.pinned,
+                "source": e.source,
             }
             for e in self._cache.values()
         ]

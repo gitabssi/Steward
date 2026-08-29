@@ -35,7 +35,9 @@ def agent_card() -> dict:
     # and no other fleet can reach. Deploy sets it (see `make deploy-all`).
     base = os.environ.get("PUBLIC_URL", "http://localhost:8091")
     return {
-        "protocolVersion": "1.0",
+        # An A2A v1 card declares its protocol per interface, not at the
+        # top level — a top-level protocolVersion is the v0.3 shape, and
+        # the managed Agent Registry rejects the mixture outright.
         "version": AGENT_VERSION,
         "name": "wet-weather-bypass-specialist",
         "description": (
@@ -45,6 +47,13 @@ def agent_card() -> dict:
         ),
         "url": f"{base}/a2a",
         "provider": {"organization": AGENCY, "url": base},
+        "supportedInterfaces": [
+            {
+                "url": f"{base}/a2a",
+                "protocolBinding": "JSONRPC",
+                "protocolVersion": "1.0",
+            }
+        ],
         "capabilities": {"streaming": False},
         "defaultInputModes": ["text/plain"],
         "defaultOutputModes": ["text/plain"],

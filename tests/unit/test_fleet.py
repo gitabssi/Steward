@@ -370,3 +370,56 @@ class TestTracing:
                 assert _current_trace_id() == outer  # one reasoning chain
         assert not outer.startswith("untraced")
         assert _current_trace_id().startswith("untraced")  # outside any span
+
+
+class TestRegistryVersioning:
+    """Discovery is only governance if the version is checked."""
+
+    def _entry(self, version: str, pinned: str):
+        from app.fleet.registry import CatalogEntry
+
+        return CatalogEntry(
+            name="wet-weather-bypass-specialist",
+            publisher="State Primacy Agency",
+            department="state-primacy-agency",
+            description="bypass lawfulness under 40 CFR 122.41(m)",
+            endpoint="https://example.invalid",
+            version=version,
+            pinned=pinned,
+        )
+
+    def test_matching_major_satisfies_the_pin(self) -> None:
+        assert self._entry("1.2.0", "^1.0").satisfies_pin()
+
+    def test_major_bump_is_refused(self) -> None:
+        # A new major version is a changed reading of the regulation.
+        assert not self._entry("2.0.0", "^1.0").satisfies_pin()
+
+    def test_no_pin_accepts_anything(self) -> None:
+        assert self._entry("7.3.1", "").satisfies_pin()
+
+    def test_mount_refuses_an_incompatible_specialist(self, monkeypatch) -> None:
+        from app.fleet.events import BUS, EventKind
+        from app.fleet.registry import Registry
+
+        monkeypatch.setenv("AGENT_REGISTRY", "off")  # no managed lookup in tests
+        registry = Registry()
+        registry._cache["role-x"] = self._entry("2.0.0", "^1.0")
+        registry._cache["role-x"] = registry._cache["role-x"].__class__(
+            **{**registry._cache["role-x"].__dict__, "name": "role-x"}
+        )
+        assert registry.mount("role-x") is None
+        refusals = [
+            e for e in BUS.tail(60)
+            if e.kind == EventKind.REGISTRY and "refused to mount" in e.action
+        ]
+        assert refusals, "an incompatible mount must be refused on the record"
+
+    def test_catalog_ships_a_pin_for_the_external_specialist(self) -> None:
+        import json
+        import pathlib
+
+        catalog = json.loads(
+            (pathlib.Path("app/fleet/catalog.json")).read_text()
+        )
+        assert catalog["pins"]["wet-weather-bypass-specialist"]
