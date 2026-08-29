@@ -93,7 +93,14 @@ class EventBus:
     # -- publishing ---------------------------------------------------------
 
     def publish(self, entry: LedgerEntry) -> LedgerEntry:
-        self._replay.append(entry)
+        # Telemetry is published live but never retained for replay. It
+        # arrives about twice a second, and keeping it would evict the
+        # rows that matter — the denials, quarantines and registry
+        # mounts — from the replay window long before anyone opened the
+        # console. A viewer who joins mid-shift must still inherit the
+        # audit history, which is the whole point of a ledger.
+        if entry.kind not in self._EPHEMERAL:
+            self._replay.append(entry)
         for q in list(self._subscribers):
             q.put_nowait(entry)
         self._persist(entry)

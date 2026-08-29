@@ -423,3 +423,24 @@ class TestRegistryVersioning:
             (pathlib.Path("app/fleet/catalog.json")).read_text()
         )
         assert catalog["pins"]["wet-weather-bypass-specialist"]
+
+
+class TestLedgerReplay:
+    """A viewer joining mid-shift must inherit the audit history."""
+
+    def test_telemetry_never_evicts_consequential_rows(self) -> None:
+        from app.fleet.events import EventBus, EventKind, LedgerEntry, Outcome
+
+        bus = EventBus(replay_size=50)
+        bus.record(EventKind.DENIAL, "a@t", "cross-facility read", Outcome.DENY)
+        # The heartbeat runs at ~2/sec; a few minutes of it must not push
+        # the denial out of the window a new console would replay.
+        for _ in range(500):
+            bus.publish(
+                LedgerEntry(EventKind.TELEMETRY, "plant-historian", "telemetry", Outcome.INFO)
+            )
+        kept = bus.tail(50)
+        assert any(e.kind == EventKind.DENIAL for e in kept), (
+            "the denial scrolled out — a judge opening the console would see nothing"
+        )
+        assert not any(e.kind == EventKind.TELEMETRY for e in kept)
