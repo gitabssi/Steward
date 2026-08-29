@@ -282,6 +282,9 @@ class Registry:
                 "mounted": e.name in self._mounted,
                 "version": e.version,
                 "pinned": e.pinned,
+                # Without this the console has no verdict to render and
+                # shows every pinned agent as failing its own pin.
+                "satisfies_pin": e.satisfies_pin(),
                 "source": e.source,
             }
             for e in self._cache.values()
