@@ -143,10 +143,22 @@ class MemoryBank:
                 return
 
     async def _delete(self, memory_id: str) -> None:
+        """Remove one memory so it can be written again with a new count.
+
+        A partial name is resolved by the client against the project *id*,
+        while creates land under the project *number* — so the delete
+        looked for the memory somewhere it had never been, got a 404, and
+        that 404 took down the whole write. A memory that is not there is
+        already deleted; the only thing lost is the observation count.
+        """
         client = self._service._get_api_client()
-        await client.agent_engines.memories.delete(
-            name=f"reasoningEngines/{self.target.engine_id}/memories/{memory_id}"
-        )
+        try:
+            await client.agent_engines.memories.delete(
+                name=f"reasoningEngines/{self.target.engine_id}/memories/{memory_id}"
+            )
+        except Exception as exc:
+            if "not_found" not in str(exc).lower() and "404" not in str(exc):
+                raise
 
     # -- reading ------------------------------------------------------------
 
