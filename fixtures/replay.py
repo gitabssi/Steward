@@ -66,12 +66,18 @@ class World:
         world keeps moving for as long as the process is up.
         """
         elapsed = (time.time() - self.started_at) * self.minutes_per_second
-        if elapsed > self._shift_minutes:
-            laps = int(elapsed // self._shift_minutes)
-            self.started_at += laps * self._shift_minutes / self.minutes_per_second
+        # Wrap a few minutes *after* the last event, not on it: resetting
+        # exactly at minute 92 meant the clock jumped back before
+        # `at_minutes <= minutes` had ever been true for the shift-end
+        # event, so the handover and the capacity assessment — the one
+        # artifact that leaves the system — were never issued at all.
+        if elapsed > self._shift_minutes + 4:
+            span = self._shift_minutes + 4
+            laps = int(elapsed // span)
+            self.started_at += laps * span / self.minutes_per_second
             self._delivered_events.clear()
             self._history.clear()
-            elapsed -= laps * self._shift_minutes
+            elapsed -= laps * span
         return elapsed
 
     def due_events(self) -> list[dict[str, Any]]:

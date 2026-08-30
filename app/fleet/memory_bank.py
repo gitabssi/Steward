@@ -128,9 +128,19 @@ class MemoryBank:
                 raise
             # create-with-id is AIP-133; there is no update. Replace.
             await self._delete(memory_id)
-            await self._service.add_memory(
-                app_name=APP_NAME, user_id=USER_ID, memories=[entry]
-            )
+            try:
+                await self._service.add_memory(
+                    app_name=APP_NAME, user_id=USER_ID, memories=[entry]
+                )
+            except Exception as retry:
+                if not _already_exists(retry):
+                    raise
+                # The delete did not take before the write raced it back.
+                # The statement is already stored under this id — only the
+                # observation count is now behind. That is a worse record,
+                # not a broken one, and it is not worth declaring the whole
+                # store degraded and falling back to a local file.
+                return
 
     async def _delete(self, memory_id: str) -> None:
         client = self._service._get_api_client()
