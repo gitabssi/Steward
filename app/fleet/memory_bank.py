@@ -181,8 +181,23 @@ class MemoryBank:
 
 
 def _already_exists(exc: Exception) -> bool:
-    text = str(exc)
-    return "ALREADY_EXISTS" in text or "409" in text
+    """Whether this failure means "that id is taken".
+
+    Matching only on ALREADY_EXISTS/409 was wrong: Vertex rejects a
+    duplicate memory id with 400 INVALID_ARGUMENT and says so in the
+    message. Since a fact's id is derived from its text, every
+    *re-observation* took that path — and re-observation is the normal
+    case, because the observation count is what the fleet is recording.
+    So the first write of any fact succeeded and every one after it
+    failed, until three failures degraded the whole store to local JSON.
+    Read the message, not just the code.
+    """
+    text = str(exc).lower()
+    return (
+        "already exists" in text
+        or "already_exists" in text
+        or "409" in text
+    )
 
 
 def _string(value: Any) -> str:

@@ -20,6 +20,18 @@ export function SystemLine({
   const [line, setLine] = useState<{ speaker: string; text: string } | null>(null);
   const spoken = useRef(new Set<string>());
   const player = useRef<HTMLAudioElement | null>(null);
+  // Read inside the async fetch, which may resolve after the operator has
+  // already switched the voice off.
+  const wanted = useRef(voice);
+  wanted.current = voice;
+
+  useEffect(() => {
+    if (voice) return;
+    // Silence means now, not after this sentence finishes.
+    player.current?.pause();
+    player.current = null;
+    onSpeaking?.(false);
+  }, [voice, onSpeaking]);
 
   useEffect(() => {
     const latest = [...entries]
@@ -47,6 +59,7 @@ export function SystemLine({
             body: JSON.stringify({ text }),
           });
           if (!response.headers.get("content-type")?.includes("audio")) return;
+          if (!wanted.current) return;  // switched off while we were fetching
           const url = URL.createObjectURL(await response.blob());
           player.current?.pause();
           const audio = new Audio(url);

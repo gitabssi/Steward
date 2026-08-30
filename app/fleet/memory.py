@@ -92,7 +92,7 @@ class FleetMemory:
                 "Memory Bank unavailable — using local store (recorded, not silent)",
                 Outcome.INFO,
                 backend=self.backend,
-                error=str(exc)[:200],
+                error=str(exc)[:600],
             )
             return None
 
@@ -155,7 +155,7 @@ class FleetMemory:
                             "fleet-memory",
                             "memory bank write failed — the local store keeps the fact",
                             Outcome.INFO,
-                            error=str(exc)[:200],
+                            error=str(exc)[:600],
                         )
             self._dirty |= failed
             if failed and self._write_failures >= 3:
