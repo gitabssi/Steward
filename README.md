@@ -321,7 +321,7 @@ production data, reproducible by anyone who clones the repository.
    usually earlier) to the date the report actually reached the
    regulator (`VALUE_RECEIVED_DATE`).
 
-## Run it
+## Run it — and reproduce every claim in this README
 
 
 ```bash
@@ -350,6 +350,18 @@ make data && make backtest
 Auth is Application Default Credentials / Workload Identity throughout.
 **No keys, tokens, or credentials exist anywhere in this repo or its
 history**; [.env.example](.env.example) documents every variable.
+
+**What each command lets you check**
+
+| Command | Reproduces | Needs cloud? |
+|---|---|---|
+| `make test` | The 42 policy tests. They assert the properties claimed above rather than exercising code paths: authority refused per tool call, an approval token that cannot be replayed, an unsourced claim quarantined, and a seed file that may not contain words which would script an agent's response | No — no network, no keys |
+| `make dev` | The whole product: fleet, console and the state primacy agency publisher, with the stale-read fault harness on | ADC only |
+| `make replay SPEED=fast` | A full 92-minute shift from the top, so a specific beat can be watched without waiting for it | ADC only |
+| `make data && make backtest` | **Every number in [The finding](#the-finding)** — 53.9%, 18,338 exceedances, 10,396 facilities, median 51 days — rebuilt from the EPA's public record by three SQL files | BigQuery (~4 GB download) |
+| `make deploy` / `make deploy-all` | The deployment described above: Agent Runtime engine, then the three Cloud Run services | Yes |
+
+If a number here is wrong, `make backtest` is where it shows.
 
 **Verify the deployed fleet yourself** — this is a live Agent Runtime
 engine holding its own workload identity (not a shared service account):
