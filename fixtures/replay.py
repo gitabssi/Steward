@@ -42,13 +42,37 @@ class World:
         self.actions: list[dict[str, Any]] = []  # operator/agent actions with effects
         self._delivered_events: set[int] = set()
         self._history: list[tuple[float, dict[str, float]]] = []
+        # When the last scheduled event has passed, the shift is over.
+        self._shift_minutes = max(
+            (e["at_minutes"] for e in self.seed["timeline"]), default=92.0
+        )
 
     # -- clock --------------------------------------------------------------
 
     @property
     def minutes(self) -> float:
-        """Plant minutes since shift start."""
-        return (time.time() - self.started_at) * self.minutes_per_second * 60 / 60
+        """Plant minutes since the current shift started.
+
+        The clock used to count past the end of the shift for ever. Every
+        event had been delivered, so the plant froze at its last
+        interpolated values and stayed there: influent stuck mid-ramp, no
+        weather, no lab reports, nothing for anyone to catch — while the
+        console went on reporting a fleet that had been up for days. A
+        judge opening the live URL five minutes after a cold start saw a
+        dead plant.
+
+        A crew that works nights works the next night too. At the end of
+        the shift the clock wraps and the events are re-armed, so the
+        world keeps moving for as long as the process is up.
+        """
+        elapsed = (time.time() - self.started_at) * self.minutes_per_second
+        if elapsed > self._shift_minutes:
+            laps = int(elapsed // self._shift_minutes)
+            self.started_at += laps * self._shift_minutes / self.minutes_per_second
+            self._delivered_events.clear()
+            self._history.clear()
+            elapsed -= laps * self._shift_minutes
+        return elapsed
 
     def due_events(self) -> list[dict[str, Any]]:
         """Timeline events whose moment has arrived, each delivered once."""
