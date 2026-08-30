@@ -32,6 +32,8 @@ in Casablanca · created for the purposes of entering this hackathon.*
 
 ![Steward architecture](docs/architecture.svg)
 
+*(3600×1920 raster: [docs/architecture.png](docs/architecture.png))*
+
 Three processes, split along the line that matters — the boundary
 between the plant's operational network and everything else.
 

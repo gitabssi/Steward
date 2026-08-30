@@ -15,7 +15,7 @@
   <text x="74" y="170" font-size="13" fill="#1c211f">SCADA telemetry · lab reports</text>
   <text x="74" y="188" font-size="13" fill="#1c211f">operator's dictated round notes</text>
   <rect x="60" y="235" width="260" height="90" fill="#fdfcf9" stroke="#1f6f6b" stroke-width="1.5"/>
-  <text x="74" y="260" font-size="14" font-weight="bold" fill="#1f6f6b">edge/ — Gemma 4 E4B</text>
+  <text x="74" y="260" font-size="14" font-weight="bold" fill="#1f6f6b">edge/ — Gemma 4 E2B</text>
   <text x="74" y="279" font-size="12" fill="#1c211f">self-hosted (Ollama), Cloud Run</text>
   <text x="74" y="296" font-size="12" fill="#1c211f">raw in → de-identified summary out</text>
   <text x="74" y="313" font-size="12" fill="#5a615e">never a Vertex API — that's the point</text>
