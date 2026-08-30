@@ -16,7 +16,7 @@ through the supervisor, which enforces three rules:
 Loops and runaways are bounded the same way: every worker task carries a
 step budget and a wall-clock ceiling; exceeding either is a quarantine,
 not a retry storm. Model endpoint failures follow a documented fallback
-chain (docs/operations.md) and are recorded — never silent.
+chain and are recorded — never silent.
 """
 
 from __future__ import annotations

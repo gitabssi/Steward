@@ -8,7 +8,7 @@ contract from workers.py, and then — before anything reaches the operator
 Model endpoints fail; the fleet does not get to fail with them. On an
 unreachable or misbehaving endpoint the pool returns the worker's
 deterministic fallback line and records a SYSTEM row saying exactly that.
-The fallback chain is documented in docs/operations.md. Nothing here is
+Nothing here is
 ever silent.
 """
 
@@ -168,7 +168,7 @@ class ReasoningPool:
         cannot help if the call hangs *before* yielding anything. So the
         whole invocation sits inside a hard timeout: a worker that stops
         responding is stopped, quarantined, and re-issued, exactly like
-        one that loops. Without this the ceiling in docs/operations.md
+        one that loops. Without this the documented wall-clock ceiling
         would be a claim rather than a mechanism.
         """
         remaining = WALL_CLOCK_CEILING_S - (time.time() - envelope.started_at)

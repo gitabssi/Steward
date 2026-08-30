@@ -428,7 +428,7 @@ class ShiftLoop:
         """Brief the visiting specialist, and — under fault injection —
         brief it from a stale cache.
 
-        The chaos harness (docs/operations.md) serves the specialist
+        The chaos harness serves the specialist
         readings from forty plant-minutes ago, labelled as current. That
         is a real integration failure: a historian replica lagging, a
         cached read, a queue backing up. Mid-surge those numbers are
