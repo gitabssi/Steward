@@ -368,6 +368,14 @@ async def registry_mount(req: RegistryMount) -> dict:
         from app.fleet.agents import workers
 
         shift.LOOP.bypass_specialist = workers.make_bypass_specialist()
+        # A specialist nobody briefs is furniture. The shift loop consults
+        # one the moment it mounts it; an operator mounting the same agent
+        # from the console got an agent that was never asked anything —
+        # and so never audited either. Fire-and-forget, because briefing
+        # takes a model call and the operator's click must not wait on it.
+        brief = asyncio.create_task(shift.LOOP.consult_specialist())
+        shift.LOOP._jobs.add(brief)
+        brief.add_done_callback(shift.LOOP._jobs.discard)
     return {"mounted": True, "name": entry.name, "version": entry.version,
             "publisher": entry.publisher, "source": entry.source}
 
