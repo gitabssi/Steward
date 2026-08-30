@@ -160,7 +160,7 @@ automation.
 | **Cloud Run** | Fleet+console, the primacy publisher, and the Gemma edge — three services, three identities |
 | **Gemini 3.7 Flash** | Every worker's reasoning: proposals, contentions, assessments, handovers |
 
-## The track's three must-demonstrates
+## Three properties this fleet has to hold
 
 
 ### Cataloged for cross-department use
@@ -212,6 +212,14 @@ The shift loop deploys to **Vertex AI Agent Runtime** as a long-lived
 job; state that must survive it lives outside it — Firestore for the
 ledger, BigQuery for the record, and **Memory Bank** for what the fleet
 has learned.
+
+One deployment setting is load-bearing and easy to miss: the Cloud Run
+service runs with `--min-instances 1`. A 92-minute shift loop in a
+container that the platform reclaims between requests restarts from
+minute zero every time it is reclaimed, so at `0` the fleet is only
+long-lived while somebody happens to be watching it. That is a
+correctness setting, not a latency one, and it is in the deploy target
+rather than left to whoever runs it.
 
 Memory Bank is the backing store, not a mention. Facts are written
 through ADK's `add_memory` with deterministic ids and their observation
@@ -319,7 +327,7 @@ production data, reproducible by anyone who clones the repository.
 # (fleet + console on :8000, state primacy agency publisher on :8091)
 make install && make dev
 
-# the tests a review tool should run first — 41 policy tests, no cloud needed
+# 42 policy tests — no cloud, no keys, no network
 make test
 
 # replay a whole shift from the top (SPEED=fast|demo|real)
@@ -545,7 +553,7 @@ video. Nothing in this project states or implies that any specific
 community's water is unsafe. These facilities are permitted, sampled,
 and reported. The story is about capacity, not safety.
 
-## Insights hit while implementing
+## What the data and the models taught us
 
 
 - **`VALUE_RECEIVED_DATE` is the whole product, hiding in a public
@@ -554,14 +562,15 @@ and reported. The story is about capacity, not safety.
   from a claim into a measurement.
 - **Enforceable-vs-monitoring is the trap in this dataset.** Most DMR
   rows carry limits that are *not* enforceable. Mixing them inflates
-  every metric in a way a domain-aware reviewer would catch;
+  every metric, and the error survives review because the number
+  looks plausible;
   `LIMIT_TYPE_CODE = 'ENF'` is in every WHERE clause that feeds a
   reported number.
 - **The quantile is the honest interface to a forecast.** A point
   forecast of 28 against a 30 limit says "fine." A P90 crossing the
   line says "one month in ten this goes wrong" — the sentence an
   operator can act on.
-- **The supervisor taught us humility, live.** A Gemini worker guessed
+- **Live workers fail in ways mocks never do.** A Gemini worker guessed
   a facility id it wasn't scoped to (denied, correctly — but the
   exception design aborted the flow); then the supervisor quarantined
   healthy workers for citing sources it couldn't independently read.
@@ -572,7 +581,7 @@ and reported. The story is about capacity, not safety.
   the same ledger as everything else made half the security story
   visible with zero extra product surface.
 
-## Things we're proud of that didn't fit in the video
+## Details that are easy to miss
 
 
 - The **single-use approval token**: minted only by the operator's
@@ -584,13 +593,13 @@ and reported. The story is about capacity, not safety.
   national record — ammonia and solids, the demo's two axes, are also
   where the forecast earns its keep nationally.
 - One Cloud Run URL is the whole product: `/console` for the operator,
-  `/api` for the ledger, `/a2a` for other fleets, ADK's dev UI for
-  reviewers.
+  `/api` for the ledger and its SSE stream, `/a2a` for other fleets, and
+  ADK's dev UI on the same service.
 - 66M rows of federal CSV → BigQuery on a laptop, streamed straight out
   of the zips, nothing unpacked to disk
   ([data/prepare_dmrs.py](data/prepare_dmrs.py)).
 
-## Bonus contributions
+## The models, and what each one is for
 
 
 - **Gemma 4** — self-hosted in [edge/](edge/) (Ollama, weights baked
@@ -602,16 +611,13 @@ and reported. The story is about capacity, not safety.
   larger sibling where there is an accelerator. Both are Gemma 4 edge
   models with native audio, and the property being demonstrated — raw
   plant data never crossing the boundary — is identical either way.
-- **TimesFM 2.5** — BigQuery ML `AI.FORECAST` quantile output; powers
+- **TimesFM** — via BigQuery ML `AI.FORECAST`; its quantile output powers
   the national backtest and the exceedance-probability framing.
 - **Chirp 3 HD** — the system's voice in product (`/api/speak`, VOICE
   toggle in the console), captioned on screen. Streaming sessions cap
   ~5 min and rotate; SSML unsupported on streaming HD.
 - **WeatherNext 2 is deliberately not claimed** — the fleet consumes
   forecast *data* via BigQuery, which is not a model integration.
-
-*A build write-up and a 15-second vertical cut are linked from the
-Devpost submission.*
 
 ---
 

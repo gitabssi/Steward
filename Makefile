@@ -129,9 +129,13 @@ deploy:
 	  --project $(PROJECT) --region $(REGION) --agent-identity \
 	  --update-env-vars "$(call env_csv,$(FLEET_ENV)),PRIMACY_AGENCY_ENDPOINT=$(primacy_url)$(if $(ENGINE),$(comma)AGENT_ENGINE_MEMORY_BANK=$(ENGINE))"
 
+# --min-instances 1 is not a performance setting here, it is a
+# correctness one: the shift is a 92-minute loop, and a container that
+# Cloud Run reclaims between requests restarts it from zero every time.
+# At 0 the fleet is only long-lived while somebody is watching it.
 deploy-run:
 	gcloud run deploy steward-fleet --source . --region $(REGION) \
-	  --project $(PROJECT) --allow-unauthenticated \
+	  --project $(PROJECT) --allow-unauthenticated --min-instances 1 \
 	  --memory 2Gi --cpu 2 --set-env-vars \
 	  "$(call env_csv,$(FLEET_ENV)),PRIMACY_AGENCY_ENDPOINT=$(primacy_url)$(if $(ENGINE),$(comma)AGENT_ENGINE_MEMORY_BANK=$(ENGINE))"
 
